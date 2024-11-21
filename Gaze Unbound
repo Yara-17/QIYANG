@@ -1,0 +1,3396 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <!-- 基本元数据 -->
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>交互式下落元素与滚动文字</title>
+    
+    <!-- 引入 GSAP, jQuery 和 jQuery UI -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.11.5/gsap.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.11.5/MotionPathPlugin.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.11.5/TextPlugin.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.11.5/EasePack.min.js"></script>
+    
+    <!-- 引入 Google Fonts 的 Open Sans 和 Roboto -->
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Open+Sans:wght@400;700&family=Roboto:wght@700;900&display=swap">
+    
+    <script>
+        gsap.registerPlugin(TextPlugin, EasePack, MotionPathPlugin);
+    </script>
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <!-- 引入jQuery UI -->
+    <link rel="stylesheet" href="https://code.jquery.com/ui/1.13.2/themes/base/jquery-ui.css">
+    <script src="https://code.jquery.com/ui/1.13.2/jquery-ui.min.js"></script>
+    
+    <style>
+        /* 定义 CSS 变量 */
+        :root {
+            --main-font: 'Gotham', sans-serif;
+            --subtitle-font: 'Core Sans C 85 Heavy', sans-serif;
+            --body-font: 'Goldplay Medium', sans-serif;
+            --scroll-duration: 25; /* 滚动持续时间，单位：秒 */
+            --fade-in-duration: 15s; /* 淡入持续时间 */
+            --scroll-delay: 7s; /* topLine 相对于 bottomLine 的延迟时间 */
+        }
+
+        /* 导入字体 */
+        @font-face {
+            font-family: 'Gotham';
+            src: url('fonts/Gotham.woff2') format('woff2'),
+                 url('fonts/Gotham.woff') format('woff'),
+                 url('fonts/Gotham.ttf') format('truetype');
+            font-weight: normal;
+            font-style: normal;
+            font-display: swap;
+        }
+
+        @font-face {
+            font-family: 'Core Sans C 85 Heavy';
+            src: url('fonts/CoreSansC85Heavy.woff2') format('woff2'),
+                 url('fonts/CoreSansC85Heavy.woff') format('woff'),
+                 url('fonts/CoreSansC85Heavy.ttf') format('truetype');
+            font-weight: 700; /* Heavy */
+            font-style: normal;
+            font-display: swap;
+        }
+
+        @font-face {
+            font-family: 'Goldplay Medium';
+            src: url('fonts/GoldplayMedium.woff2') format('woff2'),
+                 url('fonts/GoldplayMedium.woff') format('woff'),
+                 url('fonts/GoldplayMedium.ttf') format('truetype');
+            font-weight: 500; /* Medium */
+            font-style: normal;
+            font-display: swap;
+        }
+
+        /* 全局样式 */
+        html, body {
+            width: 100%;
+            height: 100%;
+            margin: 0;
+            background-color: black;
+            overflow: hidden;
+            position: relative;
+            font-family: var(--main-font);
+        }
+
+
+
+        /* 背景音乐音频样式 */
+        #background-music {
+            position: absolute;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 80%;
+            max-width: 500px;
+            border-radius: 12px;
+            z-index: 10;
+            display: none;
+        }
+
+        /* 数据解释图片样式 */
+        #data-explanation {
+            position: absolute;
+            top: 10px;
+            right: 5px;
+            width: 500px;
+            height: auto;
+            z-index: 11;
+            cursor: pointer;
+            opacity: 0; /* 初始透明度 */
+        }
+
+        /* 悬停效果 */
+        #data-explanation:hover {
+            opacity: 0.8;
+            transition: opacity 0.3s ease;
+        }
+
+        /* 缩放容器样式 */
+        #scale-container {
+            width: 1700px;
+            height: 940px;
+            position: absolute;
+            top: 0;
+            left: 0;
+            transform-origin: top left;
+        }
+
+        /* 元素容器样式 */
+        .elements {
+            position: relative;
+            width: 100%;
+            height: 100%;
+            z-index: 1;
+        }
+
+        /* 下落元素和分裂球样式 */
+        .falling-element, .split-ball {
+            width: 210px;
+            height: auto;
+            position: absolute;
+            cursor: grab;
+            z-index: 2;
+            border-radius: 50%;
+            opacity: 0;
+            transform: rotate(0deg);
+            user-select: none;
+            transform-origin: center center;
+            left: -9999px;
+            font-family: var(--main-font);
+        }
+
+        /* 拖动时改变光标 */
+        .falling-element:active, .split-ball:active {
+            cursor: grabbing;
+        }
+
+        /* 调整分裂球样式 */
+        .split-ball {
+            width: 42px;
+            height: 42px;
+            cursor: pointer;
+        }
+
+        /* 底部堆栈槽容器 */
+        .bottom-stack {
+            position: absolute;
+            bottom: 0;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 100%;
+            height: 200px;
+            pointer-events: none;
+            z-index: 1;
+        }
+
+        /* 堆栈行样式 */
+        .stack-row {
+            position: absolute;
+            height: 50px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            pointer-events: none;
+        }
+
+        .stack-ball {
+            width: 42px;
+            height: 42px;
+            border-radius: 50%;
+            position: absolute;
+            cursor: grab;
+            z-index: 2;
+            opacity: 0;
+            transform: rotate(0deg);
+            user-select: none;
+            transform-origin: center center;
+        }
+
+        /* 模态框样式 */
+        .modal {
+            position: fixed; /* 确保模态框为固定定位 */
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            overflow: auto;
+            background-color: rgba(0, 0, 0, 0.8);
+        }
+
+        /* 默认隐藏 note-modal */
+        #note-modal {
+            display: none; /* 添加此行 */
+        }
+
+        /* 模态框内容容器样式 */
+        .modal-content-container {
+            position: absolute;
+            width: 500px; /* 根据需要调整 */
+            height: 300px; /* 根据需要调整 */
+            top: 50%; /* 居中 */
+            left: 50%; /* 居中 */
+            transform: translate(-50%, -50%);
+            background-color: transparent;
+        }
+
+        /* 笔记模态框内容样式 */
+        .modal-content {
+            display: block;
+            margin: 0 auto;
+        }
+
+        /* 笔记文本样式 */
+        #note-text {
+            position: absolute;
+            color: rgb(0, 0, 0);
+            font-weight: bold;
+            font-family: var(--main-font);
+            text-align: center;
+            width: 80%;
+            word-wrap: break-word;
+            pointer-events: none;
+            user-select: none;
+            /* 设置居中 */
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            z-index: 1001; /* 高于滚动文字 */
+        }
+
+        /* 确保 pagination-buttons 在模态框中居中 */
+        .pagination-buttons {
+            position: absolute;
+            top: 85%; /* 垂直居中 */
+            left: 50%; /* 水平居中 */
+            transform: translate(-50%, -50%); /* 精确居中 */
+            z-index: 1002; /* 确保高于其他元素 */
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 40px; /* 按钮之间的间距，可根据需要调整 */
+        }
+
+        /* 可选的按钮视觉效果 */
+        .pagination-buttons img {
+            width: 85px; /* 按钮宽度，根据需要调整 */
+            height: auto;
+            cursor: pointer;
+            transition: transform 0.3s ease, opacity 0.3s ease;
+            opacity: 0.9; /* 初始不透明度 */
+        }
+
+        .pagination-buttons img:hover {
+            transform: scale(1.1); /* 悬停时放大 */
+            opacity: 1; /* 悬停时完全不透明 */
+        }
+
+        /* 关闭按钮样式 */
+        .close {
+            position: absolute;
+            top: 100px;
+            right: 400px;
+            color: #ffffffdb;
+            font-size: 70px;
+            font-weight: regular;
+            cursor: pointer;
+            transition: color 0.3s;
+            z-index: 1001;
+        }
+
+        .close:hover,
+        .close:focus {
+            color: #bbb;
+            text-decoration: none;
+        }
+
+        /* 添加评论按钮 */
+        #add-comment-button {
+            position: absolute;
+            bottom: 5px;
+            left: 5px;
+            width: 75px;
+            height: auto;
+            cursor: pointer;
+            z-index: 1002; /* 确保高于其他元素 */
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 2s ease; /* 保留不透明度的过渡效果 */
+            transform-origin: center center; /* 确保缩放从中心进行 */
+        }
+
+        /* 鼠标悬停时微微放大 */
+        #add-comment-button:hover {
+            transform: scale(1.05); /* 放大 5% */
+            transition: transform 0.3s ease; /* 添加 transform 的过渡效果 */
+        }
+
+        /* 重启动画按钮 */
+        #restart-button {
+            position: absolute;
+            bottom: 10px;
+            right: 5px;
+            width: 75px;
+            height: auto;
+            cursor: pointer;
+            z-index: 1002; /* 确保高于其他元素 */
+            opacity: 0.95;
+            transition: opacity 0.3s ease;
+        }
+
+        /* 悬停效果 */
+        #restart-button:hover {
+            opacity: 1;
+        }
+
+        /* 评论模态框样式 */
+        #comment-modal {
+            display: none;
+            position: fixed;
+            z-index: 1002;
+            left: 0px;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            overflow: auto;
+            background-color: rgba(0, 0, 0, 0.8);
+        }
+
+        /* 评论模态框内容容器 */
+        .comment-content-container {
+            position: relative;
+            bottom: 10px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: inline-block;
+            margin: 5% auto;
+            max-width: 70%;
+            max-height: 70%;
+            background-color: #ffffff00;
+            padding: 20px;
+            border-radius: 10px;
+        }
+
+        /* 评论笔记图片 */
+        #comment-image {
+            display: block;
+            margin: 0 auto;
+        }
+
+        /* 评论输入框 */
+        #comment-input {
+            position: absolute;
+            left: 50%;
+            transform: translateX(-50%);
+            top: 35%;
+            width: 80%;
+            height: 200px;
+            font-size: 24px;
+            font-family: var(--main-font);
+            text-align: center;
+            background: transparent;
+            border: none;
+            color: rgb(0, 0, 0);
+            resize: none;
+            outline: none;
+        }
+
+        /* 确认按钮 */
+        #confirm-button {
+            position: absolute;
+            bottom: 10px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 100px;
+            height: auto;
+            cursor: pointer;
+        }
+
+        /* 滚动文本区域样式 */
+        .scrolling-text {
+            position: absolute;
+            width: 1180px;
+            height: 120px;
+            overflow: hidden;
+            z-index: 1000; /* 低于便签内容 */
+            color: rgba(255, 255, 255, 0.686);
+            font-size: 32px;
+            font-family: var(--main-font);
+            opacity: 0; /* 初始隐藏 */
+            display: block; /* 初始显示 */
+        }
+
+        /* 主页面滚动文本位置 */
+        #scrolling-text {
+            top: 590px;
+            right: 500px;
+        }
+
+        /* 滚动文本行 */
+        .scrolling-line {
+            width: 100%;
+            height: 50%;
+            overflow: hidden;
+            display: flex;
+            align-items: center;
+        }
+
+        /* 滚动文本内容 */
+        .scrolling-line .text-content {
+            display: inline-block;
+            white-space: nowrap;
+            will-change: transform;
+            /* 确保文本内容起始于完全隐藏的位置 */
+            transform: translateX(100%);
+        }
+
+        /* 笔记模态框滚动文本区域样式 */
+        .note-scrolling-text {
+            position: absolute;
+            width: 800px;
+            height: 800px;
+            overflow: hidden;
+            color: white;
+            font-size: 25px;
+            font-family: var(--main-font);
+            display: none; /* 初始不显示 */
+            z-index: 1000; /* 低于便签内容 */
+        }
+
+        .note-scrolling-text.left {
+            /* 自定义左侧滚动文字的位置 */
+            left: -730px;
+            top: 0px;
+        }
+
+        .note-scrolling-text.right {
+            /* 自定义右侧滚动文字的位置 */
+            right: -730px;
+            top: 150px;
+        }
+
+        .note-scrolling-line {
+            width: 100%;
+            height: 50%;
+            overflow: hidden;
+            display: flex;
+            align-items: center;
+        }
+
+        .note-scrolling-line .text-content {
+            display: inline-block;
+            white-space: nowrap;
+            will-change: transform;
+        }
+
+        /* 单独设置每一行的位置 */
+        .line-left-top {
+            position: absolute;
+            top: 0px; /* 修正为有效的单位 */
+            left: 0px;
+        }
+
+        .line-left-bottom {
+            position: absolute;
+            top: 100px; /* 修正为有效的单位 */
+            left: 0px;
+        }
+
+        .line-right-top {
+            position: absolute;
+            top: 0px;
+            right: 0px;
+        }
+
+        .line-right-bottom {
+            position: absolute;
+            top: 50px; /* 修正为有效的单位 */
+            right: 0%;
+        }
+
+        /* 固定左上角文本 */
+        #fixed-text {
+            position: absolute;
+            top: 5px;
+            left: 5px;
+            z-index: 12;
+            color: white;
+            font-size: 32px;
+            font-family: var(--main-font);
+            opacity: 0; /* 初始透明度 */
+        }
+
+        /* 左侧新增页面按钮样式 */
+        .side-buttons {
+            position: fixed;
+            top: 68%; /* 居中垂直位置 */
+            left: 5px; /* 距离左侧10px */
+            transform: translateY(-50%);
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+            z-index: 1003;
+        }
+
+        .side-button {
+            width: 32px; /* 根据图片大小调整 */
+            height: 130px; /* 根据图片大小调整 */
+            background-color: rgba(9, 9, 9, 0.126);
+            border: 0px solid #0e0e0e;
+            border-radius: 10px 10px 10px 10px;
+            cursor: pointer;
+            transition: transform 0.3s ease, background-color 0.3s ease;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            flex-direction: column;
+        }
+
+        .side-button img {
+            width: 32px; /* 根据需要调整 */
+            height: auto; /* 根据需要调整 */
+            object-fit: contain; /* 保持图片比例 */
+        }
+
+        .side-button span {
+            display: none; /* 隐藏文本 */
+        }
+
+        .side-button:hover {
+            transform: scale(1.05);
+            background-color: rgba(255, 255, 255, 0.4);
+        }
+
+        /* 新增页面模态框样式 */
+        .page-modal {
+            display: none;
+            position: fixed;
+            z-index: 1004;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            overflow: auto;
+            background-color: rgba(0, 0, 0, 0.5); /* 半透明背景 */
+        }
+
+        .page-content {
+            position: absolute;
+            width: 70%;
+            max-width: 700px;
+            height: 80%;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background-color: #fff;
+            border-radius: 20px;
+            box-shadow: 0 0 20px rgba(0,0,0,0.5);
+            overflow-y: auto;
+            padding: 50px;
+            font-family: var(--body-font);
+        }
+
+        /* 正标题样式 */
+        .page-content h1 {
+            font-size: 30px;
+            margin-bottom: 20px; /* 调整下方间距 */
+            font-family: 'Gotham', var(--main-font);
+            font-weight: 700; /* 确保使用粗体 */
+        }
+
+        /* 副标题样式 */
+        .page-content h2 {
+            font-size: 24px; /* 根据需要调整大小 */
+            margin-bottom: 15px; /* 调整下方间距 */
+            font-family: 'Core Sans C 85 Heavy', var(--subtitle-font);
+            font-weight: 700;
+        }
+
+        /* 小标题样式 */
+        .page-content h3 {
+            font-size: 18px; /* 根据需要调整大小 */
+            margin-bottom: 8px; /* 调整下方间距，减小距离 */
+            font-family: 'Core Sans C 85 Heavy', var(--subtitle-font);
+            font-weight: 700;
+        }
+
+        /* 段落样式 */
+        .page-content p {
+            font-size: 16px;
+            line-height: 1.6;
+            margin-bottom: 15px;
+            font-family: 'Goldplay Medium', var(--body-font);
+            font-weight: 500; /* 中等粗细 */
+            color: #000000; /* 根据需要调整颜色 */
+        }
+
+        /* 特殊段落样式 */
+        .page-content .secondary-text {
+            font-size: 16px;
+            line-height: 1.6;
+            margin-bottom: 15px;
+            font-family: 'Goldplay Medium', var(--body-font);
+            font-weight: 500;
+            color: #000000; /* 确保颜色与段落一致 */
+        }
+
+        /* 滚动文本内容 */
+        .page-content img {
+            max-width: 100%;
+            height: auto;
+            margin-bottom: 15px;
+            /* 通常，图片不需要设置字体，但如果需要，可以设置 */
+            /* font-family: 'Goldplay Medium', var(--body-font); */
+        }
+
+        /* 关闭按钮样式 */
+        .page-close {
+            position: absolute;
+            top: 0px;
+            right: 15px;
+            font-size: 50px;
+            font-weight: bold;
+            color: #494848bd;
+            cursor: pointer;
+            transition: color 0.3s;
+        }
+
+        .page-close:hover {
+            color: #000000;
+        }
+
+        /* 确保便签内容位于滚动文字之上 */
+        #note-modal .modal-content-container #note-image,
+        #note-modal .modal-content-container #note-text {
+            position: absolute; /* 确保绝对定位 */
+            z-index: 1001; /* 高于滚动文字 */
+        }
+
+        /* 确保滚动文字位于便签内容之下 */
+        .note-scrolling-text {
+            z-index: 1000; /* 低于便签内容 */
+            position: absolute; /* 确保绝对定位 */
+        }
+
+        /* 定义不同字体的样式 */
+        .different-font {
+            font-family: 'Roboto', sans-serif;
+            font-weight: 900; /* 使用更粗的字体 */
+            color: #FFD700; /* 金色字体 */
+            background-color: #000000; /* 黑色背景 */
+            text-shadow: 2px 2px 4px #FFFFFF; /* 白色阴影 */
+            padding: 2px 4px; /* 内边距 */
+            border-radius: 4px; /* 圆角 */
+        }
+
+       /* 新增的内容部分样式 */
+.content-section {
+    display: flex;
+    align-items: flex-start;
+    gap: 20px; /* 可以根据需要调整 */
+    margin-bottom: 30px;
+}
+
+/* 图片在左侧 */
+.section-image.left {
+    order: 0;
+}
+
+/* 图片在右侧 */
+.section-image.right {
+    order: 1;
+}
+
+/* 文本容器样式 */
+.section-text {
+    flex: 1;
+}
+
+/* 响应式布局 */
+@media (max-width: 768px) {
+    .content-section {
+        flex-direction: column;
+        align-items: center;
+        gap: 10px; /* 减小间距 */
+    }
+
+    .section-image {
+        max-width: 10%; /* 确保图片全宽显示 */
+    }
+
+    .section-text {
+        width: 100%;
+    }
+
+    .page-content h1 {
+        font-size: 28px;
+        margin-top: 25px;
+        margin-bottom: 18px;
+    }
+
+    .page-content h2 {
+        font-size: 24px;
+        margin-top: 20px;
+        margin-bottom: 10px;
+    }
+
+    .page-content h3 {
+        font-size: 20px;
+        margin-top: 10px;
+        margin-bottom: 10px;
+    }
+    /* 其他标题级别的调整 */
+}
+
+@media (max-width: 480px) {
+    .page-content h1 {
+        font-size: 24px;
+        margin-top: 20px;
+        margin-bottom: 15px;
+    }
+
+    .page-content h2 {
+        font-size: 20px;
+        margin-top: 15px;
+        margin-bottom: 8px;
+    }
+
+    .page-content h3 {
+        font-size: 18px;
+        margin-top: 8px;
+        margin-bottom: 8px;
+    }
+
+    .section-image {
+        max-width: 200px;
+    }
+
+    .section-text {
+        width: 100%;
+    }
+
+    .sidebar {
+        margin: 10px 0;
+    }
+}
+
+
+
+            /* 其他标题级别的调整 */
+        
+    </style>
+</head>
+<body>
+    <body>
+        <!-- 背景 GIF 容器 -->
+        <div id="background-gif-container">
+            <img class="background-gif" src="背景/11月8日 (1)(2).gif" alt="Background GIF">
+            <img class="background-gif" src="背景/19-5.gif" alt="Background GIF">
+            <img class="background-gif" src="背景/11月19日-3.gif" alt="Background GIF">
+            <img class="background-gif" src="背景/19-7.gif" alt="Background GIF">
+            <img class="background-gif" src="背景/19-4.gif" alt="Background GIF">
+            <img class="background-gif" src="背景/11月8日 (1)(2).gif" alt="Background GIF">
+            <!-- 预留更多 GIF -->
+        </div>
+    </body>
+    
+
+<html lang="zh">
+<head>
+    <!-- 基本元数据 -->
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>交互式下落元素与滚动文字</title>
+    
+    <!-- 引入 GSAP 和其他库 -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.11.5/gsap.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.11.5/MotionPathPlugin.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.11.5/TextPlugin.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.11.5/EasePack.min.js"></script>
+    
+    <!-- 其他引入和样式 -->
+    <style>
+        /* 之前的 CSS 代码保持不变 */
+
+        /* 更新后的背景 GIF 样式 */
+        #background-gif-container {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 0;
+            pointer-events: none;
+            overflow: hidden;
+        }
+
+        #background-gif-container img.background-gif {
+            position: absolute;
+            top: 40%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 90vw;
+            height: auto;
+            opacity: 0; /* 初始透明度 */
+        }
+    </style>
+</head>
+<body>
+
+
+    <!-- 其他内容保持不变 -->
+
+    <!-- GSAP 动画脚本 -->
+    <script>
+        // 确保 DOM 加载完成后再执行动画
+        document.addEventListener("DOMContentLoaded", function() {
+            const gifs = document.querySelectorAll("#background-gif-container img.background-gif");
+            const fadeDuration = 2; // 每个淡入淡出的持续时间（秒）
+            const displayDuration = 100; // 每个 GIF 完全显示的时间（秒）
+            const staggerDelay = fadeDuration; // 每个 GIF 开始淡入的延迟（秒）
+
+            // 设置初始状态
+            gsap.set(gifs, { opacity: 0 });
+
+            // 创建一个无限循环的时间轴
+            const tl = gsap.timeline({ repeat: -1, repeatDelay: 0 });
+
+            gifs.forEach((gif, index) => {
+                tl.to(gif, { opacity: 1, duration: fadeDuration, ease: "power2.inOut" }, index * staggerDelay)
+                  .to(gif, { opacity: 0, duration: fadeDuration, ease: "power2.inOut" }, (index * staggerDelay) + displayDuration);
+            });
+
+            // 计算总动画时间
+            const totalTime = (fadeDuration + displayDuration) * gifs.length;
+
+            // 循环动画
+            tl.timeScale(1).repeat(-1);
+        });
+    </script>
+</body>
+</html>
+
+
+        <!-- 预留更多 GIF -->
+    </div>
+
+    <!-- 背景音乐 -->
+    <audio 
+        id="background-music"
+        src="音乐/GameMP3.mp3" 
+        loop 
+        controls
+        muted
+        allow="autoplay">
+    </audio>
+
+    <!-- 缩放容器 -->
+    <div id="scale-container">
+        <!-- 固定左上角文本 -->
+        <div id="fixed-text">
+            Gaze Unbound
+        </div>
+
+        <!-- 下落元素 -->
+        <div class="elements">
+            <img src="元素设计/不雅言论@4x.png" class="falling-element" data-type="ungraceful-comment" alt="Ungraceful Comment" />
+            <img src="元素设计/性暗示4@4x.png" class="falling-element" data-type="sexual-hint" alt="Sexual Hint" />
+            <img src="元素设计/视觉不适@4x.png" class="falling-element" data-type="visual-discomfort" alt="Visual Discomfort" />
+            <img src="元素设计/外贸攻击@4x.png" class="falling-element" data-type="appearance-attack" alt="Appearance Attack" />
+            <img src="元素设计/不道德@4x.png" class="falling-element" data-type="immoral" alt="Immoral" />
+            <img src="元素设计/服装@4x.png" class="falling-element" data-type="clothing" alt="Clothing" />
+            <img src="元素设计/不理解@4x.png" class="falling-element" data-type="misunderstanding" alt="Misunderstanding" />
+            <img src="元素设计/对社会影响@4x.png" class="falling-element" data-type="social-impact" alt="Social Impact" />
+        </div>
+
+        <!-- 底部堆栈槽容器 -->
+        <div class="bottom-stack"></div>
+
+        <!-- 添加评论按钮 -->
+        <img id="add-comment-button" src="元素设计/添加评价@2x.png" alt="Add Comment" />
+
+        <!-- 数据解释图片 -->
+        <img id="data-explanation" src="元素设计/信息解释3@2x.png" alt="Data Explanation" />
+
+        <!-- 重启动画按钮 -->
+        <img id="restart-button" src="元素设计/重启@2x.png" alt="Restart Animation" />
+
+        <!-- 滚动文本区域 -->
+        <div id="scrolling-text" class="scrolling-text">
+            <div class="scrolling-line">
+                <div class="text-content">
+                    <!-- 第一行滚动文本，内容由JavaScript动态添加 -->
+                </div>
+            </div>
+            <div class="scrolling-line">
+                <div class="text-content">
+                    <!-- 第二行滚动文本，内容由JavaScript动态添加 -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 笔记模态框 -->
+    <div id="note-modal" class="modal">
+        <span class="close">&times;</span>
+        <div class="modal-content-container">
+            <img class="modal-content" id="note-image" src="" alt="Note">
+            <div id="note-text">This is a sample sentence.</div> <!-- 用于显示句子的元素 -->
+
+            <!-- 笔记模态框中的滚动文本 -->
+            <div class="note-scrolling-text left">
+                <div class="note-scrolling-line line-left-top">
+                    <div class="text-content"></div>
+                </div>
+                <div class="note-scrolling-line line-left-bottom">
+                    <div class="text-content"></div>
+                </div>
+            </div>
+
+            <div class="note-scrolling-text right">
+                <div class="note-scrolling-line line-right-top">
+                    <div class="text-content"></div>
+                </div>
+                <div class="note-scrolling-line line-right-bottom">
+                    <div class="text-content"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 确保分页按钮在模态框内部，但不在 modal-content-container 内 -->
+        <div class="pagination-buttons">
+            <img id="prev-sentence" src="元素设计/左键2@2x.png" alt="Previous Sentence">
+            <img id="next-sentence" src="元素设计/右键2@2x.png" alt="Next Sentence">
+        </div>
+    </div>
+
+    <!-- 评论模态框 -->
+    <div id="comment-modal" class="modal">
+        <span class="close">&times;</span>
+        <div class="comment-content-container">
+            <img id="comment-image" src="元素设计/评论便签@2x.png" alt="Comment Note">
+            <textarea id="comment-input" placeholder="Please enter your comment..."></textarea>
+            <img id="confirm-button" src="元素设计/确认键@2x.png" alt="Confirm">
+        </div>
+    </div>
+
+    <!-- 新增的页面按钮 -->
+    <div class="side-buttons">
+        <div class="side-button" id="button-usage">
+            <img src="元素设计/声音@2x.png" alt="使用指南" />
+            <!-- <span>使用指南</span> --> <!-- 可选：保留但隐藏 -->
+        </div>
+        <div class="side-button" id="button-project">
+            <img src="元素设计/数据探索@2x.png" alt="项目介绍" />
+            <!-- <span>项目介绍</span> -->
+        </div>
+        <div class="side-button" id="button-goals">
+            <img src="元素设计/发现偏见@2x.png" alt="我们的目标" />
+            <!-- <span>我们的目标</span> -->
+        </div>
+    </div>
+
+    <!-- 新增的页面模态框：使用指南 -->
+    <div id="page-modal-usage" class="page-modal">
+        <div class="page-content">
+            <span class="page-close">&times;</span>
+
+            <!-- 内容部分 1 -->
+            <div class="content-section">
+                <img src="文本图片/截屏2024-11-19 03.12.44.png" alt="使用指南图片1" class="section-image left">
+                <div class="section-text">
+                    <h1>Unveiling Bias: The Visual Language of Design</h1>
+                    <p>
+                        The <strong>Breaking the Gaze</strong> project transforms societal biases against sensual dance into an immersive visual and interactive experience, reimagining these prejudices. Utilizing a dataset of 300 negative social media comments, the project categorizes these biases into eight distinct themes. Each category is visualized through unique imagery, dynamic gradients, and interactive animations, connecting the raw emotional intensity of the data with thoughtful artistic interpretation. This section highlights how design elements—color contrasts, gradients, and motion—visually represent the cultural tensions and overlapping biases revealed in the data.
+                    </p>
+                </div>
+            </div>
+
+            <!-- 内容部分 2 -->
+            <div class="content-section">
+                <img src="文本图片/截屏2024-11-19 03.12.44.png" alt="使用指南图片2" class="section-image right">
+                <div class="section-text">
+                    <h2>Breaking the Gaze</h2>
+                    <p>
+                        Repurposes societal prejudices around sensuality into an immersive visual and interactive format, offering a reimagined perspective. Based on an analysis of 300 negative social media comments, the project identifies eight categories of bias. Each is visually represented through distinctive icon designs, dynamic gradients, and interactive animations, fusing emotional intensity with artistic expression. This section illustrates how design elements, such as color conflicts, gradients, and motion effects, reflect cultural conflicts and overlapping biases within the data.
+                    </p>
+                </div>
+            </div>
+
+            <!-- 内容部分 3 -->
+            <div class="content-section">   
+                <div class="section-text">
+                    <h2>Interpreting the Bias Categories</h2>
+                    <h3>Understanding the Categories</h3>
+                    <p>
+                        The project divides the negative comments into eight categories, each representing a unique societal bias against sensual dance. These categories are visually presented through striking and engaging icons, paired with unique color schemes that resonate with the theme of each bias:
+                    </p>
+                    <img src="元素设计/数据解读.png" alt="Usage Guide Image 1">
+                </div>
+            </div>
+
+            <!-- 内容部分 4 -->
+            <div class="content-section">
+                <img src="文本图片/元素5.png" alt="使用指南图片4" class="section-image right">
+                <div class="section-text">
+                    <h3>Vulgarity:</h3>
+                    <p class="secondary-text">Lip-shaped designs combined with dripping visual elements symbolize society's perception of sensual dance as "indecent" or "provocative," hinting at cultural roots of taboo and shame. A red and cyan contrast emphasizes emotional tension and miscommunication.</p>
+
+                    <h3>Sexualization:</h3>
+                    <p class="secondary-text">Hip-centric designs and curving lines reflect the tension between voyeuristic gazes and the artistic expression of sensual dance. Cool purples and vibrant greens clash to highlight the conflict and power imbalance of sexualized perspectives.</p>
+
+                    <h3>Clothing Criticism:</h3>
+                    <p class="secondary-text">Bikini-style icons with blocked areas focus on societal scrutiny of dancers' attire and the overemphasis on body exposure. Orange-to-blue gradients underscore the blurred lines between sensuality and objectification, amplifying the tension.</p>
+
+                    <h3>Artistic Denial:</h3>
+                    <p class="secondary-text">Blurred waveforms and question mark shapes represent the societal questioning and misunderstanding of sensual dance as a legitimate art form. Soft purple and blue gradients reflect multidimensional denial of artistic value.</p>
+
+                    <h3>Cultural and Moral Judgment:</h3>
+                    <p class="secondary-text">A hand-shaped "prohibition" symbol reflects societal accusations and cultural clashes between traditional values and modern expression. Blue and orange contrasts suggest cultural and moral opposition.</p>
+
+                    <h3>Social Impact Concerns:</h3>
+                    <p class="secondary-text">A networked globe pattern represents uncertainty about the influence of sensual dance on societal values and youth. Green and pink contrasts symbolize the coexistence of hope and anxiety.</p>
+
+                    <h3>Visual Discomfort:</h3>
+                    <p class="secondary-text">Distorted eye icons convey discomfort and alienation, reflecting societal unease with the visual intensity of sensual dance. Deep blues enhance the sense of visual and emotional distance.</p>
+
+                    <h3>Body Shaming:</h3>
+                    <p class="secondary-text">Centered around weight-bearing elements, these icons symbolize societal criticism of dancers' bodies and suppression of their autonomy. Yellow and blue contrasts represent the clash between criticism and the dancers' resilience and empowerment.</p>
+
+                    <h2>Design Intention: Challenging Perceptions through Symbolism</h2>
+                    <p>
+                        These icons go beyond simple visual aesthetics to become emotional and cultural symbols of bias. Each design reflects the complexity and intensity of societal judgment underlying the comments. By blending abstract art with tangible categories, the project connects raw data with emotional narratives, encouraging viewers to confront and critically examine these biases.
+                    </p>
+                    <p class="secondary-text"><strong class="extra-bold">Human Dynamics in Entry Effects:</strong> 
+                        Icons enter the page with slow, breath-like motions, symbolizing the subtle yet pervasive presence of bias.</p>
+                    <p class="secondary-text"><strong class="extra-bold">Fragmentation and Reconstruction:</strong> 
+                        During interactions, icons gradually fragment into smaller elements, representing the deconstruction and redefinition of perceptions through engagement.</p>
+                    <p class="secondary-text"><strong class="extra-bold">Emotional Engagement:</strong> <br>   
+                        Interactive features like clicking and dynamic transformations allow audiences to directly experience the visual impact and emotional resonance of each bias.</p>
+                </div>
+            </div>
+            <div class="content-section">
+                <div class="section-text">
+                    <p>
+                        <p class="footer-copyright">&copy; 2024 [QI]. If you like this design, give me five stars!</p>
+
+
+                    </p>
+                    
+                </div>
+            </div>
+              
+            </div>
+            
+        </div>
+    </div>
+</div>
+
+<!-- 新增的页面模态框：项目介绍 -->
+<div id="page-modal-project" class="page-modal">
+    <div class="page-content">
+        <span class="page-close">&times;</span>
+
+        <!-- 内容部分 1 -->
+        <div class="content-section">
+            <img src="文本图片/截屏2024-11-19 03.12.41.png" alt="Interactive Design" class="section-image right">
+            <div class="section-text">
+                <h1>Interactive Design: Exploring Biases Through Engagement</h1>
+                <p>
+                    The <strong class="extra-bold">Breaking the Gaze</strong> project incorporates interactive features </p>to immerse audiences in a dynamic exploration of societal biases surrounding sensual dance. Designed as an interactive platform, </p>the website enables users to engage with data, challenge their perspectives, and actively participate in deconstructing prejudice. Below are the key features of the website:
+                </p>
+                
+            </div>
+        </div>
+
+        <!-- 内容部分 2 -->
+        <div class="content-section">
+            <div class="section-text">
+                <h2>Clickable Bias Icons: Directly Confronting Prejudice</h2>
+                <p>
+                    <strong class="extra-bold">Functionality</strong><br>
+                    Biases are represented by clickable icons, each corresponding to one or more categories of prejudice (e.g., vulgarity, sexualization, clothing criticism). Clicking an icon reveals the negative comment it represents.
+                </p>
+                <p>
+                    <strong class="extra-bold">Interactive Feedback</strong><br>
+                    Upon clicking, viewers hear a dancer’s response to the bias, asserting empowerment and providing a counter-narrative. This pairing of comment and response allows audiences to confront prejudice in a visceral and engaging way, bridging the gap between societal judgment and the dancer’s resilience.
+                </p>
+            </div>
+            <img src="文本图片/小球2.png" alt="Clickable Bias Icons" class="section-image right">
+        </div>
+
+        <!-- 内容部分 3 -->
+        <div class="content-section">
+            <img src="文本图片/丢2.png" alt="Throwing Bias Interaction" class="section-image left">
+            <div class="section-text">
+                <h2>Throwing Bias: A Symbolic Interaction</h2>
+                <p>
+                    <strong class="extra-bold">Functionality</strong><br>
+                    Users can “throw” bias icons toward the central dancer animation. This motion symbolizes societal judgments and criticism projected onto dancers.
+                </p>
+                <p>
+                    <strong class="extra-bold">Dynamic Visuals</strong><br>
+                    When icons collide with the dancer, they shatter into smaller fragments that drift across the screen, representing the deconstruction of societal prejudice. This action highlights the strength of dancers in facing criticism and reframes biases as opportunities for dialogue and change.
+                </p>
+            </div>
+        </div>
+
+        <!-- 内容部分 4 -->
+        <div class="content-section">
+            <div class="section-text">
+                <h2>Audience Participation: Writing Comments</h2>
+                <p>
+                    <strong class="extra-bold">Functionality</strong><br>
+                    A feature located in the bottom-left corner allows users to write their own reflections or opinions about sensual dance. Once submitted, these comments appear as floating spheres at the top of the screen, contributing to the evolving visual narrative.
+                </p>
+                <p>
+                    <strong class="extra-bold">Visual Feedback</strong><br>
+                    Positive comments are displayed in warm tones. These comments gently float upward, symbolizing hope and support, forming a cohesive visual layer that celebrates constructive contributions. Unlike bias icons, which feature sharp contrasts to represent tension, positive comments create a harmonious and uplifting atmosphere.
+                </p>
+            </div>
+            <img src="文本图片/评论6.png" alt="Audience Participation" class="section-image right">
+        </div>
+
+        <!-- 内容部分 5 -->
+        <div class="content-section">
+            <div class="section-text">
+                <p>
+                    By combining these interactive elements, <strong class="extra-bold">Breaking the Gaze</strong> transforms passive observation into active participation. The design encourages the audience to reflect, participate, and leave comments to leave their own voice, promoting a deeper understanding of sensual dance as a form of empowerment and self-expression.
+                </p>
+            </div>
+        </div>
+        <p class="footer-copyright">&copy; 2024 [QI]. Achievement unlocked: Built a website!</p>
+
+      <footer>
+    </div>
+    </div>
+</footer>
+    </div>
+</div>
+
+
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Breaking the Gaze: Visualizing Bias and Empowerment in Sensual Dance</title>
+    <!-- 引入字体 -->
+    <link href="https://fonts.googleapis.com/css2?family=Crimson+Text:wght@400;700&family=Roboto:wght@400;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div id="page-modal-goals" class="page-modal">
+        <div class="page-content">
+            <!-- 关闭按钮 -->
+            <span class="page-close">&times;</span>
+
+            <!-- 主标题 -->
+            <header class="header">
+                <h1>Breaking the Gaze: Visualizing Bias and Empowerment in Sensual Dance</h1>
+                <p class="sub-header">Exploring biases and empowerment through sensual dance</p>
+            </header>
+
+            <!-- 内容布局 -->
+            <div class="alternating-layout">
+                <!-- 左图右文 -->
+                <div class="row content-section">
+                    <div class="content-image-container">
+                        <img src="文本图片/pole2.png" alt="Dance showcasing strength" class="section-image right">
+                    </div>
+                    <div class="section-text">
+                        <h2>Breaking the Gaze: Visualizing Bias and Empowerment in Sensual Dance</h2>
+                        <p class="secondary-text">
+                            Sensual dance forms like <strong>Heels, Pole Dance,</strong> and <strong>Twerk</strong> are frequently misjudged, labeled as “<strong>vulgar</strong>” or “<strong>provocative</strong>,” and reduced to surface-level entertainment. These judgments reflect deeply ingrained societal discomfort with <strong>bodily autonomy</strong> and <strong>gender expression</strong>. Breaking the Gaze uses <em>data visualization</em> to expose these biases, transforming them into interactive and thought-provoking narratives that challenge stereotypes and highlight the <strong>artistry</strong> and <strong>empowerment</strong> behind sensual dance.
+                        </p>
+                    </div>
+                </div>
+
+                <!-- 右图左文 -->
+                <div class="row reverse content-section">
+                    <div class="section-text">
+                        <h2>Reframing Sensual Dance as Art</h2>
+                        <p class="secondary-text">
+                            Breaking the Gaze repositions sensual dance as a valid and <strong>empowering art form</strong>, moving beyond judgment to explore its <strong>transformative potential</strong>. Through its design, the project emphasizes the dancers' <strong>strength</strong> in reclaiming narratives, creating a space where sensual dance is seen for its <strong>complexity, resilience,</strong> and <strong>beauty</strong>.
+                        </p>
+                    </div>
+                    <div class="content-image-container">
+                    </div>
+                </div>
+
+                <!-- 侧边栏 - Quick Facts -->
+                <aside class="sidebar">
+                    <h3>Quick Facts</h3>
+                    <ul class="quick-facts">
+                        <li>
+                            <strong>Heels Dance:</strong> A fusion of strength and elegance, showcasing the art of movement in high heels.
+                        </li>
+                        <li>
+                            <strong>Pole Dance:</strong> A mesmerizing combination of athleticism, grace, and artistic expression.
+                        </li>
+                        <li>
+                            <strong>Twerk:</strong> A bold and empowering declaration of bodily autonomy and rhythmic prowess.
+                        </li>
+                    </ul>
+                </aside>
+
+                <!-- 最后一段文本 -->
+                <div class="row content-section">
+                    <div class="section-text">
+                        <h2>A Call for Reflection</h2>
+                        <p class="secondary-text">
+                            Breaking the Gaze invites viewers to examine their own biases. By interacting with <strong>visualized prejudices</strong> and witnessing their <strong>fragmentation</strong>, audiences are encouraged to rethink their assumptions about sensual dance. The project emphasizes the <strong>transformative potential</strong> of these art forms, not just as performances, but as acts of <strong>defiance, identity,</strong> and <strong>empowerment</strong>.
+                        </p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 页脚 -->
+            <footer class="footer">
+                <p class="footer-copyright">&copy; 2024 [QI]. Bugs? No, those are features.</p>
+
+
+            </footer>
+        </div>
+    </div>
+</body>
+
+
+
+
+
+
+    <script>
+        // 滚动文字内容和延迟配置
+        const scrollingTextsList = [
+            {
+                containerSelector: '#scrolling-text',
+                topLine: [
+                "My legs, my body, my rules. Your opinion? Unsolicited and unnecessary.",
+                "Your negativity won’t stop me. It only reminds me why I started.",
+    "Funny how my dancing has you so bothered, yet here you are watching it.",
+    "Art is subjective. If you don’t like it, keep scrolling—your negativity isn’t needed.",
+    "Your negativity won’t stop me; it only fuels my fire.",
+    "Thanks for your concern, but my body isn't here for your approval or validation.",
+    "What you call 'provocative,' I call confidence. Your discomfort is not my responsibility.",
+    "My dance is about my expression, not your assumptions. Try respecting the difference.",
+    "Criticizing me won’t make you any happier, but go ahead if it helps you sleep at night.",
+    "I wear what I want, dance how I want, and live how I want. Deal with it.",
+    "Your insults say more about you than my dance ever could.",
+    "If my confidence feels like a threat, maybe it’s because it exposes your insecurities.",
+    "I dance for the joy it brings me, not to fit into your limited view of what’s acceptable. Watch, don’t watch—either way, I’ll keep dancing."
+    
+                ],
+                bottomLine: [
+    "If you're so obsessed with my 'imperfections,' maybe the issue isn’t me but you.",
+    "Sensuality is power, and I'm not apologizing for owning mine.",
+    "You can't handle a woman who embraces her body and her art? That’s your problem, not mine.",
+    "My dancing isn't here to make you comfortable. It's here to celebrate freedom and expression.",
+    "This 'low dance' has you commenting, watching, and reacting. Who's really the one stuck here?",
+    "My body moves for me, not for your narrow expectations.",
+    "You can label me all you want; it doesn’t change my value or my vision.",
+    "If my confidence offends you, then you're clearly not ready for a world where women own their power.",
+    "Don’t like my dance? Try creating something better instead of tearing others down.",
+    "My body, my canvas. Your judgment? Irrelevant and outdated.",
+    "My dance represents strength, joy, and expression. Your opinion is just noise.",
+    "For every negative comment you leave, I’ll keep dancing louder and prouder.",
+    "It's not my responsibility to educate you about art, but maybe start by looking up 'self-expression.'",
+    "The beauty of art is that it doesn’t need everyone's approval, especially yours."
+
+                ],
+                scrollDuration: 10, // Scroll duration in seconds
+                topLineDelay: 3, // seconds after bottomLine
+                bottomLineDelay: 0.5 // no delay
+            },
+        ];
+
+        // 评论球列表
+        let commentBalls = [];
+
+        // 用户添加的评论
+        let userComments = [];
+
+        $(document).ready(function() {
+            gsap.registerPlugin(MotionPathPlugin);
+
+            // 设计基线尺寸
+            const designWidth = 1700;
+            const designHeight = 940;
+
+            const margin = 25;
+            const elementWidth = 205;
+
+            // splitConfig 包含 targetAreas，每个 targetArea 包含 maxCount, xMin, xMax, yMin, yMax
+            const splitConfig = {
+                'ungraceful-comment': {
+                    count: 88,
+                    image: '元素设计/不雅言论球@4x.png',
+                    targetAreas: [
+                        { maxCount: 10, xMin: 5, xMax: 180, yMin: 50, yMax:51 },
+                        { maxCount: 10, xMin: 20, xMax: 225, yMin: 70, yMax:71},
+                        { maxCount: 10, xMin: 50, xMax: 255, yMin: 90, yMax:91},
+                        { maxCount: 10, xMin: 30, xMax: 200, yMin: 110, yMax:111},
+                        { maxCount: 10, xMin: 30, xMax: 210, yMin: 130, yMax:131},
+                        { maxCount: 10, xMin: 5, xMax: 175, yMin: 150, yMax:151 },
+                        { maxCount: 10, xMin: 10, xMax: 175, yMin: 170, yMax:171},
+                        { maxCount: 10, xMin: 25, xMax: 215, yMin: 190, yMax:191},
+                        { maxCount: 8, xMin: 5, xMax: 150, yMin: 210, yMax:211 }
+                    ]
+                },
+                'sexual-hint': {
+                    count: 66,
+                    image: '元素设计/性球@4x.png',
+                    targetAreas: [
+                        { maxCount: 10, xMin: 250, xMax:400, yMin: 155, yMax:156 },
+                        { maxCount: 10, xMin: 225, xMax:410, yMin: 175, yMax:176 },
+                        { maxCount: 10, xMin: 240, xMax:450, yMin: 195, yMax:196 },
+                        { maxCount: 10, xMin: 225, xMax:400, yMin: 215, yMax:216 },
+                        { maxCount: 10, xMin: 220, xMax:375, yMin: 235, yMax:236 },
+                        { maxCount: 10, xMin: 275, xMax:450, yMin: 255, yMax:256 },
+                        { maxCount: 6, xMin: 245, xMax:350, yMin: 275, yMax:276 }
+                    ]
+                },
+                'visual-discomfort': {
+                    count: 12,
+                    image: '元素设计/不适球7@4x.png',
+                    targetAreas: [
+                        { maxCount: 10, xMin: 850, xMax: 1025, yMin: 415, yMax:  416},
+                        { maxCount: 2, xMin: 875, xMax: 1050, yMin: 435, yMax:436 }
+                    ]
+                },
+                'appearance-attack': {
+                    count: 8,
+                    image: '元素设计/外贸攻击球2@4x.png',
+                    targetAreas: [
+                        { maxCount: 8, xMin: 1100, xMax: 1275, yMin: 425, yMax:426 }
+                    ]
+                },
+                'immoral': {
+                    count: 23,
+                    image: '元素设计/不道德球@4x.png',
+                    targetAreas: [
+                        { maxCount: 10, xMin: 370, xMax: 540, yMin: 360, yMax:361 },
+                        { maxCount: 10, xMin: 400, xMax: 575, yMin: 380, yMax:381 },
+                        { maxCount: 3, xMin: 325, xMax: 525, yMin: 400, yMax:401 }
+                    ]
+                },
+                'clothing': {
+                    count: 35,
+                    image: '元素设计/服装球@4x.png',
+                    targetAreas: [
+                        { maxCount: 10, xMin: 1300, xMax: 1475, yMin: 300, yMax:301 },
+                        { maxCount: 10, xMin: 1225, xMax: 1400, yMin: 320, yMax:321 },
+                        { maxCount: 10, xMin: 1275, xMax: 1460, yMin: 340, yMax:341 },
+                        { maxCount: 5, xMin: 1275, xMax: 1475, yMin: 360, yMax:361 }
+                    ]
+                },
+                'misunderstanding': {
+                    count: 72,
+                    image: '元素设计/不理解球1@4x.png',
+                    targetAreas: [
+                        { maxCount: 10, xMin: 1500, xMax:1665, yMin:135, yMax:136},
+                        { maxCount: 10, xMin: 1450, xMax:1615, yMin:155, yMax:156},
+                        { maxCount: 10, xMin: 1450, xMax:1665, yMin:175, yMax:176},
+                        { maxCount: 10, xMin: 1435, xMax:1620, yMin:195, yMax:196},
+                        { maxCount: 10, xMin: 1400, xMax:1585, yMin:215, yMax:216},
+                        { maxCount: 10, xMin: 1460, xMax:1650, yMin:235, yMax:236},
+                        { maxCount: 10, xMin: 1470, xMax:1600, yMin:255, yMax:256},
+                        { maxCount: 2, xMin: 1480, xMax:1550, yMin:275, yMax:276}
+                    ]
+                },
+                'social-impact': {
+                    count: 9,
+                    image: '元素设计/对社会危害球@4x.png',
+                    targetAreas: [
+                        { maxCount: 9, xMin: 600, xMax:775 , yMin:430, yMax:431 }
+                    ]
+                }
+            };
+
+            // 使用笔记映射
+            const noteMapping = {
+                'ungraceful-comment': {
+                    image: '元素设计/低俗便签4@2x.png',
+                    sentences: [
+                        'Must be a bar-dance specialist',
+                        'Is this a strip dance?',
+                        'Isn’t this just a thirst trap?',
+                        'At best, she’s worth 1500 as a KTV girl',
+                        'Why not watch? It’s free after all.',
+                        'Is this provocative or not? You tell me.',
+                        'She’s clearly setting up thirst traps but won’t admit it.',
+                        'After graduation, you’ll just be dancing on bar platforms',
+                        'Why not just go work at a KTV already?',
+                        'At KTV, at least she’d be a top pick.',
+                        'Are we sure this isn’t a nightclub performance?',
+                        'What even is this? Just borderline moves to grab attention.',
+                        'She’d make more money dancing in bars.',
+                        'Nightclub vibes, totally on the edge.',
+                        'Is this supposed to be a strip dance?',
+                        'This is downright scandalous.',
+                        'What kind of dance is this? Perfect for bar gigs.',
+                        'Flirtatious and provocative.',
+                        'Acting all coquettish and flirtatious.',
+                        'Isn’t this just about showing off skin? You call this dance? KTV is full of performances like this.',
+                        'Wearing that outfit and doing this kind of dance—don’t you know what image you’re projecting? And you act so self-righteous.',
+                        'So borderline, yet she still calls it art.',
+                        'She probably learned this at a bar',
+                        'She must be part of some nightclub atmosphere team.',
+                        'The secret to getting views these days is just stripping.',
+                        'I’ve turned TikTok into a red-light district',
+                        'You can’t even find pretty girls at KTV anymore',
+                        'TikTok is just getting sleazier',
+                        'Cheap, vulgar content',
+                        'So tacky',
+                        'This kind of performance has zero class',
+                        'But honestly, I enjoy this kind of tacky fun',
+                        'Who’s even impressed by this? It’s just greasy and off-putting.',
+                        'This is obviously a nightclub routine',
+                        'Honestly, this belongs in a nightclub',
+                        'She’s fully playing the role of a bar dancer',
+                        'This performance looks like it’s straight out of a bar',
+                        'Looks like a wilted flower',
+                        'Is she some washed-up, aging dancer',
+                        'It’s exactly what it looks like—shaking her butt aimlessly',
+                        'Not worth anything',
+                        'An insult to elegance',
+                        'Her expressions scream nightclub performer',
+                        'The dancers at the bars I’ve been to wear the same outfits and do the same moves',
+                        'Unbecoming',
+                        'Completely debauched and unrestrained',
+                        'She should stick to bar performances',
+                        'Even as a woman, I find this too revealing',
+                        'Completely sleazy vibes',
+                        'Perfect outfit for a nightclub',
+                        'Just plain vulgar.',
+                        'What kind of dance style is this? Borderline moves again.',
+                        'So scandalous',
+                        'I can’t even tell art from vulgarity anymore',
+                        'This dance seems to represent the struggles of laid-off women trying to find work',
+                        'Free content—what more could you ask for?',
+                        'Is this a bar dance or something?',
+                        'Is this practice for future nightclub jobs?',
+                        'Shouldn’t this cost money to watch?',
+                        'Vulgar.',
+                        'Selling herself under the guise of art.',
+                        'Not bad, she knows plenty of moves',
+                        'She’s giving it away for free—might as well enjoy it quietly',
+                        'This isn’t dance; it’s just shaking your body aimlessly',
+                        'Looks more like a performance for tips than an actual dance',
+                        'The entire dance is just thirst traps disguised as choreography',
+                        'If this is supposed to be sensual, it just feels cheap',
+                        'She’s better off performing at bars, not on a real stage',
+                        'Can this kind of dance even be considered professional?',
+                        'Looks more like she’s practicing for a nightclub audition',
+                        'She’s trying way too hard to be provocative',
+                        'Acting so seductive for no reason—what’s the message here?',
+                        'Dancing like this and still pretending to be classy—what a joke',
+                        'No grace, no art, just blatant teasing',
+                        'She might as well be working in a red-light district',
+                        'What’s the difference between this and pole dancing at a sleazy club?',
+                        'If shaking your ass counts as dance, then I’m an artist too',
+                        'This isn’t art; it’s soft porn with a soundtrack',
+                        'She’s not performing, she’s just selling herself',
+                        'She’s turning the art of dance into a sleazy spectacle',
+                        'If this is the future of dance, we’re doomed',
+                        'She’s really pushing boundaries—of how low someone can go',
+                        'She should thank the audience for tolerating this mess',
+                        'Guess her next gig will be at a strip club',
+                        'What exactly is this trash? A bar performance trying to look classy?',
+                        'She’s just gyrating like she’s in heat—how is this dance?',
+                        'Her dance is as tasteless as it gets, just pure vulgarity.',
+                        'This is nothing but a glorified striptease',
+                    ],
+                    size: {
+                        width: '690px',
+                        height: 'auto'
+                    },
+                    position: {
+                        x: '50%',
+                        y: '30%'
+                    },
+                    textPosition: {
+                        top: '100%',
+                        left: '70%'
+                    },
+                    modalPosition: { // 新增的modalPosition
+                        top: '30%',      // 根据需要调整
+                        left: '44%',     // 根据需要调整
+                        transform: 'translate(-50%, -50%)'
+                    },
+                    fontFamily: 'Arial, sans-serif',
+                    fontSize: '35px',
+                    // 滚动文本配置
+                    scrollingTextConfig: {
+                        leftTopLine: {
+                            content: '“如果我的舞蹈是擦边，那你在看什么呢？每个人都有自己的视角，我只是在表达我的艺术”',
+                            scrollDuration: 25, // seconds
+                            delay: 4, // seconds before starting
+                            position: { top: '0px', left: '10px', fontSize: '30px' }
+                        },
+                        leftBottomLine: {
+                            content: '“艺术和舞蹈的界限是模糊的，重要的是你是否能看到其中的情感与故事”',
+                            scrollDuration: 25,
+                            delay: -8, // seconds after leftTopLine
+                            position: { top: '100px', left: '10px', fontSize: '30px' }
+                        },
+                        rightTopLine: {
+                            content: '"If my dance is borderline, then what are you watching? Everyone has their own perspective; I am simply expressing my art.”',
+                            scrollDuration: 25,
+                            delay: 4,
+                            position: { top: '0px', right: '3px', fontSize: '30px' }
+                        },
+                        rightBottomLine: {
+                            content: '“The lines between art and dance are blurred. What matters is whether you can feel the emotions and understand the story behind it.“',
+                            scrollDuration: 28,
+                            delay: -9,
+                            position: { top: '100px', right: '0px', fontSize: '30px' }
+                        }
+                    },
+                    // 音频列表
+                    audio: [
+                        '反击音频/The lines.mp3',
+                        '反击音频/If my dance.mp3',
+                        '反击音频/新录音 76.MP3',
+                        '反击音频/新录音 77.MP3',
+                    ],
+                },
+                'sexual-hint': {
+                    image: '元素设计/性便签4@2x.png',
+                    sentences: [
+
+    'No man dares to watch openly',
+    'I show more to you than your girlfriend does',
+    'It triggered a sexual response',
+    'I think it is very erotic',
+    'Men would drool after watching it',
+    'It sparks endless imagination.',
+    'Often, these girls like to do stimulating things.',
+    "Which man wouldn't like it after watching?",
+    'Promiscuous.',
+    'How much per night?',
+    'It can be sold at a higher price.',
+    'Involving pornography, report to the police.',
+    'To please you, me, him.',
+    'The ultimate purpose of performing this dance is not just for others to watch more.',
+    'Such flexible movements, your husband must love them.',
+    'She twists and turns diligently to please me.',
+    'Who has her address?',
+    'To all the perverts, just say whether it looks good or not.',
+    'With a monthly salary of fifty thousand, would you marry me?',
+    'The movements are too fast and not intense enough.',
+    'Enthralling all kinds of perverts!',
+    "Tempting others is fine, but don't lure away someone else's husband.",
+    'To please us.',
+    'Hip twisting.',
+    'She twists and turns diligently to please me.',
+    'Are you perverts finding it exciting?',
+    'This is the beginning of crimes for perverts.',
+    'What is needed to marry her?',
+    'You should go to a bigger stage to attract perverted men.',
+    'The way of twisting the hips looks good.',
+    'What is your hip measurement?',
+    'All perverts adore you.',
+    "You can't blame others for overthinking because the dance movements indeed leave much to the imagination.",
+    'Haha, a courtship dance.',
+    'Twisting and turning diligently to please me.',
+    'What do you say, if I learn this dance and perform it for my husband, can he handle it?',
+    'This dance indeed has many sexual implications.',
+    'It is inherently a sexual implication, no doubt about it.',
+    'These movements can only remain niche and exist as dances performed for capitalists.',
+    'But I think this dance was developed to be viewed by men.',
+    "Continuously displaying women's most private parts before others.",
+    'Sexual implications and borderline dances were almost glorified.',
+    'A typical way to charm men, with lowbrow taste.',
+    "To showcase one's beauty, one must perform sexually suggestive movements.",
+    'The videos were banned due to pornography.',
+    'Sexual implications and borderline dances were almost glorified.',
+    'Like prostitution.',
+    'Performing suggestive movements.',
+    "I think it's just about charming men.",
+    'But some movements are indeed sexually suggestive.',
+    "Isn't it just about charming men?",
+    'It looks too much like a sex worker.',
+    'For wealthy people to enjoy.',
+    'This dance indeed has many sexual implications.',
+    'This content indeed has sexual implications and borderline elements; this dance genre primarily focuses on sexual implications.',
+    'But this indeed has strong sexual implications.',
+    'Dance was originally created to cater to the opposite sex.',
+    'All have sexual implications.',
+    'Heels dance was created to attract the opposite sex.',
+    'When I see eroticism in dance, it means it has that element.',
+    'You can see the sexual implications in the videos.',
+    'This kind is aimed at men.',
+    'She only knows how to charm men.',
+    'Involving pornography, report to the police.',
+    'This is the wife you married for hundreds of thousands, pleasing me in front of you.',
+    'Courtship.',
+    'Performing like this is illegal.',
+    'The photographer is a man; can you handle that feeling?',
+    'A dance that pleases middle to upper-class men.',
+    'Desire for sex.',
+    'Girls from the red-light district still pretend to be innocent.',
+    'Entertaining the warlords and conglomerates.',
+    'These opening and closing movements, filled with seduction, are too deliberate.',
+    'Can we blame men for not being able to control themselves?',
+    'I am sorry, I just want to ask what is the point of learning this? To perform it for your husband?  '
+
+
+                    ],
+                    size: {
+                        width: '950px',
+                        height: 'auto'
+                    },
+                    position: {
+                        x: '50%',
+                        y: '30%'
+                    },
+                    textPosition: {
+                        top: '380px',
+                        left: '90%'
+                    },
+                    modalPosition: { // 新增的modalPosition
+                        top: '20%',      // 根据需要调整
+                        left: '38%',     // 根据需要调整
+                        transform: 'translate(-50%, -50%)'
+                    },
+                    fontFamily: 'Arial, sans-serif',
+                    fontSize: '35px',
+                    // 滚动文本配置
+                    scrollingTextConfig: {
+                        leftTopLine: {
+                            content: '“性感是我的选择，不是你来定义我。我的性感舞蹈表达的是力量，而不是迎合某种期待”',
+                            scrollDuration: 25, // seconds
+                            delay: 6, // seconds before starting
+                            position: { top: '-100px', left: '0px', fontSize: '30px' }
+                        },
+                        leftBottomLine: {
+                            content: '“我的表演是为了展现自信和魅力，而不是你所想象的色情。每个人都可以有不同的看法,但我不在乎”',
+                            scrollDuration: 25,
+                            delay: -8, // seconds after leftTopLine
+                            position: { top: '0px', left: '0px', fontSize: '30px' }
+                        },
+                        rightTopLine: {
+                            content: '"Sensuality is my choice, not yours to define me. My personality and dance embody strength, not to conform to any expectations”',
+                            scrollDuration: 25,
+                            delay: 8,
+                            position: { top: '30px', right: '-50px', fontSize: '30px' }
+                        },
+                        rightBottomLine: {
+                            content: '“My performances are meant to showcase confidence and charisma, not the eroticism you imagine. Everyone may have their own opinions, but I do not care“',
+                            scrollDuration: 28,
+                            delay: -9,
+                            position: { top: '130px', right: '0px', fontSize: '30px' }
+                        }
+                    },
+                    // 音频列表
+                    audio: [
+                       '反击音频/My performences.mp3',
+                        '反击音频/Sensuality.mp3',
+                        '反击音频/新录音 80.MP3',
+                        '反击音频/新录音 78.mp3',
+                    ],
+                },
+'visual-discomfort': {
+                    image: '元素设计/尴尬便签2@2x.png',
+                    sentences: [
+                    
+    "Still feels pretty cringe.",
+    "Aren't you embarrassed?",
+    "Don't know why I feel kinda awkward.",
+    "Awkward.",
+    "But why does watching this video feel so off...",
+    "Feels so cringe.",
+    "Don't make others feel physically uncomfortable, okay?",
+    "But every move here is just unsettling.",
+    "Makes me sick.",
+    "I'm so embarrassed.",
+    "Can't even bear to look at that part.",
+    "No aesthetic value whatsoever, just physically repulsive to watch. Same here.",
+
+
+                        
+                    ],
+                    size: {
+                        width: '900px',
+                        height: 'auto'
+                    },
+                    position: {
+                        x: '50%',
+                        y: '30%'
+                    },
+                    textPosition: {
+                        top: '250px',
+                        left: '86%'
+                    },
+                    modalPosition: { // 新增的modalPosition
+                        top: '30%',      // 根据需要调整
+                        left: '38%',     // 根据需要调整
+                        transform: 'translate(-50%, -50%)'
+                    },
+                    fontFamily: 'Arial, sans-serif',
+                    fontSize: '35px',
+                    // 滚动文本配置
+                    scrollingTextConfig: {
+                        leftTopLine: {
+                            content: '“尴尬是每个人的主观感受，或许这正是性感舞蹈正向挑战我们舒适区挑战”',
+                            scrollDuration: 25, // seconds
+                            delay: 8, // seconds before starting
+                            position: { top: '0px', left: '50px', fontSize: '30px' }
+                        },
+                        leftBottomLine: {
+                            content: '“我欣赏你的诚实，但希望你能从不同的角度去理解我的表演”',
+                            scrollDuration: 25,
+                            delay: -8, // seconds after leftTopLine
+                            position: { top: '100px', left: '50px', fontSize: '30px' }
+                        },
+                        rightTopLine: {
+                            content: '"Embarrassment is a subjective feeling for everyone. Perhaps this is exactly how sexy dance positively challenges our comfort zones”',
+                            scrollDuration: 25,
+                            delay: 8,
+                            position: { top: '0px', right: '0px', fontSize: '30px' }
+                        },
+                        rightBottomLine: {
+                            content: '“I appreciate your honesty, but I hope you can understand my performance from a different perspective“',
+                            scrollDuration: 28,
+                            delay: -9,
+                            position: { top: '100px', right: '0px', fontSize: '30px' }
+                        }
+                    },
+                    // 音频列表
+                    audio: [
+                    '反击音频/I appreiate.mp3',
+                        '反击音频/Embarrassment.mp3',
+                        '反击音频/新录音 955.MP3',
+                        '反击音频/新录音 96.MP3',
+                    ],
+                },
+'appearance-attack': {
+                    image: '元素设计/外貌便签2@2x.png',
+                    sentences: [
+                    
+    "Everyone's legs are thick, except for one.",
+    "At least there's one with thin legs.",
+    "Legs are so thick.",
+    "Thick legs, big arms... nothing sexy about that.",
+    "This body shape doesn't look like someone who dances often.",
+    "Your body isn't good enough to wear this kind of outfit; honestly, there's no aesthetic appeal at all.",
+    "Besides the dance being bad, your legs aren't particularly pretty, and your outfit is inappropriate.",
+    "All I see is fat, along with short arms and short legs."
+
+                        
+                    ],
+                    size: {
+                        width: '550px',
+                        height: 'auto'
+                    },
+                    position: {
+                        x: '50%',
+                        y: '30%'
+                    },
+                    textPosition: {
+                        top: '100%',
+                        left: '52%'
+                    },
+                    modalPosition: { // 新增的modalPosition
+                        top: '25%',      // 根据需要调整
+                        left: '50%',     // 根据需要调整
+                        transform: 'translate(-50%, -50%)'
+                    },
+                    fontFamily: 'Arial, sans-serif',
+                    fontSize: '35px',
+                    // 滚动文本配置
+                    scrollingTextConfig: {
+                        leftTopLine: {
+                            content: '“每个人的身体都有自己的美丽，真正的力量在于接受和爱自己”',
+                            scrollDuration: 25, // seconds
+                            delay: 5, // seconds before starting
+                            position: { top: '0px', left: '10px', fontSize: '30px' }
+                        },
+                        leftBottomLine: {
+                            content: '“我在舞台上展现的是我的能力和热情，而不是你的审美标准”',
+                            scrollDuration: 25,
+                            delay: -8, // seconds after leftTopLine
+                            position: { top: '100px', left: '10px', fontSize: '30px' }
+                        },
+                        rightTopLine: {
+                            content: '"Every body has its own beauty. True strength lies in accepting and loving yourself”',
+                            scrollDuration: 25,
+                            delay: 7,
+                            position: { top: '0px', right: '50px', fontSize: '30px' }
+                        },
+                        rightBottomLine: {
+                            content: '“On stage, I showcase my abilities and passion, not your aesthetic standards“',
+                            scrollDuration: 28,
+                            delay: -9,
+                            position: { top: '100px', right: '50px', fontSize: '30px' }
+                        }
+                    },
+                    // 音频列表
+                    audio: [
+                    '反击音频/EVerybody.mp3',
+                        '反击音频/ON stage.mp3',
+                        '反击音频/新录音 98.MP3',
+                        '反击音频/新录音 97.MP3',
+                    ],
+                },
+'immoral': {
+                    image: '元素设计/道德便签3@2x.png',
+                    sentences: [
+    
+    "Would she dance like that for her dad? ",
+    "Her boyfriend is so generous.",
+    "I'll ridicule her boyfriend for a lifetime.",
+    "How would her boyfriend feel watching her dance live?",
+    "Who gave you the courage?",
+    "Can you wear something so revealing at school?",
+    "Is this a school? Sorry, I'm blind.",
+    "Posting such videos tarnishes the school's reputation.",
+    "Can you wear something so revealing at school?",
+    "I'm embarrassed. This is a school, not a dance club.",
+    "Don't bring nightclub dance vibes into a pure campus.",
+    "A girl like her shouldn't be brought home.",
+    "Do they really dance such erotic moves at school?",
+    "How dare you post this?",
+    "Don't post this kind of stuff.",
+    "How would the men at home feel watching this, including father, husband, son?",
+    "Do you dare dance like this in front of your dad?",
+    "Women like her are infertile.",
+    "Women like her shouldn't be wives.",
+    "Husband won't let you dance like this.",
+    "Do you think it's right to promote this in public places?",
+    "Dance appropriately for the occasion.",
+    "Would you dare wear such revealing clothes during family gatherings at home?",
+    "How can there be such a dance? I don't know how many moms would let their daughters learn this dance.",
+    "Can't understand it.",
+    "No matter how good you dance, if she's my daughter, I wouldn't like it!",
+    "It's better not to learn it.",
+
+                    ],
+                    size: {
+                        width: '690px',
+                        height: 'auto'
+                    },
+                    position: {
+                        x: '50%',
+                        y: '30%'
+                    },
+                    textPosition: {
+                        top: '600px',
+                        left: '280px'
+                    },
+                    modalPosition: { // 新增的modalPosition
+                        top: '10%',      // 根据需要调整
+                        left: '49%',     // 根据需要调整
+                        transform: 'translate(-50%, -50%)'
+                    },
+                    fontFamily: 'Arial, sans-serif',
+                    fontSize: '35px',
+                    // 滚动文本配置
+                    scrollingTextConfig: {
+                        leftTopLine: {
+                            content: '“舞蹈是一种表达方式，无论在何处都可以进行，只要我们尊重彼此的选择”',
+                            scrollDuration: 25, // seconds
+                            delay: 6, // seconds before starting
+                            position: { top: '0px', left: '10px', fontSize: '30px' }
+                        },
+                        leftBottomLine: {
+                            content: '“如果我们能在学校讨论多样性和包容性，性感舞蹈也可以是一种文化交流的方式”',
+                            scrollDuration: 25,
+                            delay: -8, // seconds after leftTopLine
+                            position: { top: '100px', left: '10px', fontSize: '30px' }
+                        },
+                        rightTopLine: {
+                            content: '"Dance is a form of expression and can be performed anywhere, as long as we respect each other is choices”',
+                            scrollDuration: 25,
+                            delay: 7,
+                            position: { top: '0px', right: '3px', fontSize: '30px' }
+                        },
+                        rightBottomLine: {
+                            content: '“If we embrace diversity and inclusivity in schools, sexy dances can also serve as a form of cultural exchange“',
+                            scrollDuration: 28,
+                            delay: -9,
+                            position: { top: '100px', right: '0px', fontSize: '30px' }
+                        }
+                    },
+                    // 音频列表
+                    audio: [
+                  '反击音频/Dance.mp3',
+                        '反击音频/If we.mp3',
+                        '反击音频/新录音 90.MP3',
+                        '反击音频/新录音 91.MP3',
+                    ],
+                },
+'clothing': {
+                    image: '元素设计/服装便签3@2x.png',
+                    sentences: [
+                    
+  "Oh wow, I've never seen someone dress that provocatively before.",
+  "What's the difference between this and just wearing underwear outside?",
+  "Even if you dressed less revealingly, you wouldn't get so much flack.",
+  "Today's dances are all about stripping and exposing, aren't they?",
+  "Dressing scantily and stripping for attention—so awkward and utterly unremarkable.",
+  "Students dressing in nightclub attire? How original.",
+  "If only they wore a bit more, none of this would happen.",
+  "Dancing in underwear? How avant-garde.",
+  "Do you really have to dress like that?",
+  "Now they're dancing in swimsuits? How impressive.",
+  "While I respect your freedom to dress, at least make it somewhat appropriate.",
+  "Like a ghost—clean up your face, won't you?",
+  "Dancing in clothes that just barely cover anything. Nice.",
+  "At 20, wearing makeup that screams 40+. Fabulous.",
+  "Why don't you wear a bit more instead of such highly suggestive clothing?",
+  "Who looks like you dressed like that?",
+  "Wearing lingerie as outerwear? Groundbreaking.",
+  "Dressing so provocatively, aren't we?",
+  "Dressing so casually? How daring.",
+  "Can't dance in normal clothes? Shocking.",
+  "Can't you dance if you dress properly?",
+  "You could wear something else, why dress like that?",
+  "Would you dare wear such appropriate clothes when dining with family and friends at home?",
+  "Suited perfectly for nightclub attire, aren't they?",
+  "Pants aren't really suitable for dancing, are they?",
+  "It's not necessary to wear such pants to express art, right?",
+  "Do you have to wear something that looks like underwear?",
+  "If you wore more clothes, none of this would be an issue.",
+  "The secret to getting views is just stripping, apparently.",
+  "Again, wear more clothes and this wouldn't be a topic.",
+  "What else to wear when dressed so provocatively?",
+  "When I see eroticism in dance, it means it has that element.",
+  "You can see the sexual implications in the videos.",
+  "This kind is aimed at men.",
+  "She only knows how to charm men.",
+  "Involving pornography, report to the police.",
+  "This is the wife you married for hundreds of thousands, pleasing me in front of you.",
+  "Courtship.",
+  "Performing like this is illegal."
+
+                        
+                    ],
+                    size: {
+                        width: '690px',
+                        height: 'auto'
+                    },
+                    position: {
+                        x: '50%',
+                        y: '30%'
+                    },
+                    textPosition: {
+                        top: '380px',
+                        left: '70%'
+                    },
+                    modalPosition: { // 新增的modalPosition
+                        top: '20%',      // 根据需要调整
+                        left: '44%',     // 根据需要调整
+                        transform: 'translate(-50%, -50%)'
+                    },
+                    fontFamily: 'Arial, sans-serif',
+                    fontSize: '35px',
+                    // 滚动文本配置
+                    scrollingTextConfig: {
+                        leftTopLine: {
+                            content: '“这是我的风格，我觉得自己很美。如果你不喜欢，完全没关系，重要的是我对自己的感觉”',
+                            scrollDuration: 25, // seconds
+                            delay: 10, // seconds before starting
+                            position: { top: '0px', left: '10px', fontSize: '30px' }
+                        },
+                        leftBottomLine: {
+                            content: '“每种服装都有它的文化背景和意义，舞者通过服装表达个性，为什么要限制？”',
+                            scrollDuration: 25,
+                            delay: -8, // seconds after leftTopLine
+                            position: { top: '100px', left: 'px', fontSize: '30px' }
+                        },
+                        rightTopLine: {
+                            content: '"This is my style; I feel beautiful. If you do not like it, that is completely fine. What matters is how I feel about myself”',
+                            scrollDuration: 25,
+                            delay: 8,
+                            position: { top: '0px', right: '3px', fontSize: '30px' }
+                        },
+                        rightBottomLine: {
+                            content: '“Every outfit has its cultural background and significance. Dancers express their personalities through clothing—why impose restrictions“',
+                            scrollDuration: 28,
+                            delay: -9,
+                            position: { top: '100px', right: '0px', fontSize: '30px' }
+                        }
+                    },
+                    // 音频列表
+                    audio: [
+                    '反击音频/Every outfit.mp3',
+                        '反击音频/This is.mp3',
+                        '反击音频/新录音 83.MP3',
+                        '反击音频/新录音 97.MP3',
+                    ],
+                },
+'misunderstanding': {
+                    image: '元素设计/不理解便签3@2x.png',
+                    sentences: [
+                   
+
+    "Can't comprehend it, tastes so crude.",
+    "Unwatchable.",
+    "If you can't dance it, don't even try.",
+    "What are they even trying to express?",
+    "Can't appreciate any aesthetic in this dance.",
+    "Why are they dancing with no sense of rhythm?",
+    "Completely clueless about the meaning of these videos.",
+    "Who is the target audience for this nonsense?",
+    "Zero aesthetic value.",
+    "Like epilepsy attacks.",
+    "What's the point of this dance?",
+    "Nothing looks good here.",
+    "This is so ridiculous.",
+    "What are they dancing to?",
+    "Absolutely no aesthetic to speak of.",
+    "Can't understand it.",
+    "Can't distinguish between art and vulgarity.",
+    "What kind of dance is this, juggling?",
+    "Is this even art?",
+    "Primitive dance.",
+    "No idea what they're dancing to.",
+    "Don't watch it unless you're wasted.",
+    "What is this? Dance? Aerobics? Yoga! I don't get it.",
+    "What's the point of dancing so provocatively?",
+    "What dance is this? Can't appreciate it.",
+    "Can't see any beauty in these moves.",
+    "Do you even think it's good-looking?",
+    "What are you doing every day? Seriously.",
+    "Don't like it.",
+    "Don't want to comment, just want to vomit.",
+    "Anyway, I don't appreciate it.",
+    "Can't understand appreciation.",
+    "Honestly, I don't see anything good about it.",
+    "Can't comprehend the usefulness of learning this.",
+    "Not good-looking.",
+    "Is there any aesthetic here?",
+    "They look like ghosts.",
+    "Why perform this dance? It's too ugly, unbearable.",
+    "This dance is just unacceptable.",
+    "Sexy dances called art?",
+    "She dances with no aesthetic whatsoever.",
+    "But I can't see any beauty in your dance.",
+    "Where is this dance suitable to perform? Who is the audience?",
+    "No sense of beauty or strength.",
+    "Not a single aesthetic touch.",
+    "Dancing lacks any aesthetic appeal.",
+    "Really no aesthetic.",
+    "No aesthetic at all, just physically uncomfortable to watch.",
+    "What the hell is this?",
+    "Zero aesthetic, nothing at all.",
+    "Besides the dance being ugly, your legs aren't particularly beautiful, and your attire is inappropriate.",
+    "What kind of dance is this?",
+    "Even girls don't find it appealing.",
+    "Too avant-garde.",
+    "Sorry, I just can't appreciate it.",
+    "A dance developed from the male gaze with no aesthetic whatsoever.",
+    "What the hell are they dancing to?",
+    "Is this even aesthetically pleasing?",
+    "Hard to judge.",
+    "Are you sure this is a normal dance? Not something niche?",
+    "Does this dance even have any visual appeal?",
+    "Never thought this counts as dancing.",
+    "Do square dances look like this now???",
+    "Laughing, this dance was invented to be funny.",
+    "Don't impose your art and thoughts on this behavior... it's laughable.",
+    "Is this dance really good-looking? Honestly, facepalm. Sorry, I just can't appreciate it.",
+    "How can there be such a dance? Doge. I don't know how many moms would let their daughters learn this.",
+    "Don't get it: Why are you crawling on the ground?",
+    "What kind of dance is this, juggling?",
+    "Why are they crawling on the ground? Can this even be called dancing?",
+    "Can't say, just...",
+    "What's the use of this dance?",
+    "Can't appreciate it.",
+    "Couldn't see any beauty at all.",
+    "What's the purpose of this dance?",
+    "Not good-looking, beautiful.",
+    "Mainly dancing for whom, huh?",
+    "Who designed these dance moves?",
+    "Is this even dancing?",
+    "What kind of dance is this? Are there competitions? Who's the audience?",
+    "You tell me dancing this is for fitness.",
+    "What dance style is this?",
+    "What is this performance trying to convey?",
+    "First twisting on the floor, then twisting up again.",
+    "Can't appreciate this kind of dance.",
+    "Don't know where the focus is supposed to be.",
+    "And this kind of move.",
+    "What's the point of dancing this stuff?",
+    "Is this even called dance? Are you sure?",
+    "What is this thing?",
+    "I don't think this is art.",
+    "Just a scene of struggling around.",
+    "Sorry, I just want to ask what's the point of learning this? Dancing for your husband?"
+          
+                    ],
+                    size: {
+                        width: '690px',
+                        height: 'auto'
+                    },
+                    position: {
+                        x: '50%',
+                        y: '30%'
+                    },
+                    textPosition: {
+                        top: '230px',
+                        left: '70%'
+                    },
+                    modalPosition: { // 新增的modalPosition
+                        top: '30%',      // 根据需要调整
+                        left: '44%',     // 根据需要调整
+                        transform: 'translate(-50%, -50%)'
+                    },
+                    fontFamily: 'Arial, sans-serif',
+                    fontSize: '35px',
+                    // 滚动文本配置
+                    scrollingTextConfig: {
+                        leftTopLine: {
+                            content: '“艺术没有固定的标准，我的舞蹈就是我的艺术，你不需要喜欢，但我希望你能尊重”',
+                            scrollDuration: 25, // seconds
+                            delay: 4, // seconds before starting
+                            position: { top: '0px', left: '10px', fontSize: '30px' }
+                        },
+                        leftBottomLine: {
+                            content: '“欣赏艺术的关键在于理解，每个舞者的表达都有其独特性，试着去理解而不是批判”',
+                            scrollDuration: 25,
+                            delay: -8, // seconds after leftTopLine
+                            position: { top: '100px', left: '10px', fontSize: '30px' }
+                        },
+                        rightTopLine: {
+                            content: '"Art has no fixed standards. My dance is my art. You do not have to like it, but I hope you can respect it”',
+                            scrollDuration: 25,
+                            delay: 7,
+                            position: { top: '0px', right: '3px', fontSize: '30px' }
+                        },
+                        rightBottomLine: {
+                            content: '“The essence of appreciating art lies in understanding it. Every dancer is expression is unique. Try to understand instead of criticize.“',
+                            scrollDuration: 28,
+                            delay: -9,
+                            position: { top: '100px', right: '0px', fontSize: '30px' }
+                        }
+                    },
+                    // 音频列表
+                    audio: [
+                 '反击音频/The essence.mp3',
+                        '反击音频/Art has.mp3',
+                        '反击音频/新录音 88.MP3',
+                        '反击音频/新录音 89.m4a',
+                    ],
+                },
+'social-impact': {
+                    image: '元素设计/社会便签2@2x.png',
+                    sentences: [
+                    
+    "Students dressed in clothes fit for strip clubs.",
+    "Did your parents give you money to run here and pose provocatively? Is this what your exams are about?",
+    "Are schools so open these days?",
+    "Is this what students are supposed to do?",
+    "Now universities are training a bunch of bar dancers.",
+    "Just curious, where is this kind of dance suitable to be performed?",
+    "Is this really okay?",
+    "What's wrong with the world?",
+    "How can there be such dances? I don't know how many moms would let their daughters learn this kind of dance.",
+    "How many students have gone astray, entertained to death. Same here.",
+
+                        
+                    ],
+                    size: {
+                        width: '690px',
+                        height: 'auto'
+                    },
+                    position: {
+                        x: '50%',
+                        y: '30%'
+                    },
+                    textPosition: {
+                        top: '100%',
+                        left: '65%'
+                    },
+                    modalPosition: { // 新增的modalPosition
+                        top: '25%',      // 根据需要调整
+                        left: '46%',     // 根据需要调整
+                        transform: 'translate(-50%, -50%)'
+                    },
+                    fontFamily: 'Arial, sans-serif',
+                    fontSize: '35px',
+                    // 滚动文本配置
+                    scrollingTextConfig: {
+                        leftTopLine: {
+                            content: '“真正的影响来自于教育和理解，而不是恐惧。舞蹈可以启发年轻人追求自信”',
+                            scrollDuration: 25, // seconds
+                            delay: 4, // seconds before starting
+                            position: { top: '0px', left: '10px', fontSize: '30px' }
+                        },
+                        leftBottomLine: {
+                            content: '“通过正确的引导，年轻人可以从中学到自我表达和身体正面形象的重要性”',
+                            scrollDuration: 25,
+                            delay: -8, // seconds after leftTopLine
+                            position: { top: '100px', left: '10px', fontSize: '30px' }
+                        },
+                        rightTopLine: {
+                            content: '"True influence comes from education and understanding, not fear. dance can inspire young people to pursue confidence”',
+                            scrollDuration: 25,
+                            delay: 8,
+                            position: { top: '0px', right: '3px', fontSize: '30px' }
+                        },
+                        rightBottomLine: {
+                            content: '“With proper guidance, young people can learn the importance of self-expression and a positive body image from it“',
+                            scrollDuration: 28,
+                            delay: -9,
+                            position: { top: '100px', right: '0px', fontSize: '30px' }
+                        }
+                    },
+                    // 音频列表
+                    audio: [
+                    '反击音频/The influence.mp3',
+                        '反击音频/With proper.mp3',
+                        '反击音频/新录音 94.MP3',
+                        '反击音频/新录音 93.m4a',
+                    ],
+                },
+
+'modalPosition': { // 新增的modalPosition
+    top: '40%',      // 根据需要调整
+    left: '30%',     // 根据需要调整
+    transform: 'translate(-50%, -50%)'
+},
+
+
+                
+            };
+
+            // 存储已分裂的元素
+            const splitElements = new Set();
+
+            // 初始化堆栈行管理
+            const bottomStack = $('.bottom-stack');
+            let stackRows = {};
+
+            function initializeStackRows() {
+                bottomStack.empty();
+                stackRows = {};
+
+                for (const [type, config] of Object.entries(splitConfig)) {
+                    stackRows[type] = [];
+                    config.targetAreas.forEach((area, index) => {
+                        const stackRow = $('<div class="stack-row"></div>')
+                            .attr('data-type', type)
+                            .attr('data-row', index)
+                            .css({
+                                top: gsap.utils.random(area.yMin, area.yMax) + 'px',
+                                width: '100%'
+                            });
+                        bottomStack.append(stackRow);
+                        stackRows[type].push({
+                            element: stackRow,
+                            config: area,
+                            count: 0
+                        });
+                    });
+                }
+            }
+
+            initializeStackRows();
+
+            // 寻找适合的堆栈行
+            function findStackRow(type) {
+                const rows = stackRows[type];
+                for (let row of rows) {
+                    if (row.count < row.config.maxCount) {
+                        row.count++;
+                        return row;
+                    }
+                }
+                return null;
+            }
+
+            // 使用笔记映射
+            let currentNoteMapping = noteMapping;
+
+            // 存储当前句子索引和类型
+            let currentSentenceIndex = 0;
+            let currentType = '';
+
+            // 标记是否已点击第一个元素
+            let hasFirstElementClicked = false;
+
+            // 保存 .elements 容器的初始 HTML 内容
+            const initialElementsHTML = $('.elements').html();
+
+            // 变量标识是否正在重启
+            let isRestarting = false;
+
+            // 初始化滚动文本函数
+            function initializeScrollingText(config) {
+                // 显示滚动文本区域
+                $(config.containerSelector).css('display', 'block');
+                // 使用 GSAP 控制滚动文本的动画
+                gsap.to($(config.containerSelector), {
+                    opacity: 1,
+                    duration: parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--fade-in-duration')) || 1,
+                    ease: "power1.out",
+                    onComplete: () => {
+                        // 开始滚动文本
+                        setScrollingText(config);
+                    }
+                });
+            }
+
+            function setScrollingText(config) {
+                const topLineTexts = config.topLine;
+                const bottomLineTexts = config.bottomLine;
+                const scrollDuration = config.scrollDuration || 10;
+                const topLineDelay = config.topLineDelay || 0;
+                const bottomLineDelay = config.bottomLineDelay || 0;
+
+                // 初始化第一行（bottomLine） with its delay
+                cycleText(`${config.containerSelector} .scrolling-line:nth-child(2) .text-content`, bottomLineTexts, scrollDuration, bottomLineDelay);
+
+                // 初始化第二行 (topLine) with its delay
+                cycleText(`${config.containerSelector} .scrolling-line:nth-child(1) .text-content`, topLineTexts, scrollDuration, topLineDelay);
+            }
+
+            function cycleText(selector, texts, scrollDuration, delay) {
+    const $textContent = $(selector);
+    let currentIndex = 0;
+
+    function updateText() {
+        if (currentIndex >= texts.length) {
+            currentIndex = 0; // 循环显示
+        }
+        $textContent.text(texts[currentIndex]);
+        currentIndex++;
+    }
+
+    // 初始显示
+    updateText();
+
+    // 设置初始位置为完全在右侧外部
+    gsap.set($textContent, { x: '100%' });
+
+    // 使用 GSAP 控制滚动文本的动画
+    gsap.fromTo($textContent, 
+        { x: '100%' }, 
+        {
+            x: '-100%',
+            duration: scrollDuration,
+            ease: "linear",
+            repeat: -1,
+            onRepeat: () => {
+                gsap.set($textContent, { x: '100%' });
+                updateText();
+            },
+            delay: delay // 设置延迟
+        }
+    );
+}
+
+
+
+            // 初始化所有主页面滚动文本
+            function initializeAllScrollingTexts() {
+                scrollingTextsList.forEach(config => {
+                    initializeScrollingText(config);
+                });
+            }
+
+            // 初始化滚动文本区域函数（适用于模态框中的左侧和右侧滚动文本）
+            function initializeModalScrollingTexts(type) {
+                const mapping = currentNoteMapping[type];
+                if (!mapping) return;
+
+                const config = mapping.scrollingTextConfig;
+
+                if (config) {
+                    // 初始化左上行
+                    cycleModalText(
+                        '.line-left-top .text-content',
+                        config.leftTopLine.content,
+                        config.leftTopLine.scrollDuration,
+                        config.leftTopLine.delay,
+                        config.leftTopLine.position
+                    );
+
+                    // 初始化左下行
+                    cycleModalText(
+                        '.line-left-bottom .text-content',
+                        config.leftBottomLine.content,
+                        config.leftBottomLine.scrollDuration,
+                        config.leftBottomLine.delay,
+                        config.leftBottomLine.position
+                    );
+
+                    // 初始化右上行
+                    cycleModalText(
+                        '.line-right-top .text-content',
+                        config.rightTopLine.content,
+                        config.rightTopLine.scrollDuration,
+                        config.rightTopLine.delay,
+                        config.rightTopLine.position
+                    );
+
+                    // 初始化右下行
+                    cycleModalText(
+                        '.line-right-bottom .text-content',
+                        config.rightBottomLine.content,
+                        config.rightBottomLine.scrollDuration,
+                        config.rightBottomLine.delay,
+                        config.rightBottomLine.position
+                    );
+
+                    // 显示滚动文本区域
+                    $('.note-scrolling-text').css('display', 'block');
+
+                    // 自动启动所有滚动文本
+                    $('.note-scrolling-text .text-content').each(function() {
+                        const $textContent = $(this);
+                        const scrollDuration = parseFloat($textContent.data('scroll-duration')) || 10;
+                        const scrollDelay = parseFloat($textContent.data('scroll-delay')) || 0;
+
+                        gsap.fromTo($textContent, 
+                            { x: '100%' }, 
+                            {
+                                x: '-100%',
+                                duration: scrollDuration,
+                                ease: "linear",
+                                repeat: -1,
+                                onRepeat: () => {
+                                    gsap.set($textContent, { x: '100%' });
+                                    // 不需要更新文本，因为内容已固定
+                                },
+                                delay: scrollDelay
+                            }
+                        );
+                    });
+                }
+            }
+
+            function cycleModalText(selector, content, scrollDuration, delay, position) {
+                const $textContent = $(selector);
+                $textContent.text(content);
+
+                // 设置位置和样式
+                if (position) {
+                    $textContent.closest('.note-scrolling-line').css({
+                        top: position.top || '0px',
+                        left: position.left || 'auto',
+                        right: position.right || 'auto',
+                        fontSize: position.fontSize || '18px'
+                    });
+                }
+
+                // 存储 scrollDuration 和 delay 为 data 属性
+                $textContent.data('scroll-duration', scrollDuration);
+                $textContent.data('scroll-delay', delay);
+            }
+
+            // 初始化元素位置和下落动画
+            function initializeElements() {
+                const elements = gsap.utils.toArray('.falling-element');
+                const numberOfElements = elements.length;
+
+                const containerWidth = designWidth;
+                const containerHeight = designHeight;
+                const segmentWidth = (containerWidth - 2 * margin) / numberOfElements;
+
+                elements.forEach((element, index) => {
+                    const baseX = margin + (index + 0.5) * segmentWidth;
+                    const randomOffset = gsap.utils.random(-segmentWidth * 0.2, segmentWidth * 0.2);
+                    let left = baseX + randomOffset;
+
+                    left = Math.max(margin, Math.min(left, containerWidth - margin - elementWidth));
+
+                    const elementHeight = $(element).height();
+                    const maxDropTop = containerHeight - elementHeight - margin;
+
+                    // 设置初始位置但不设置透明度
+                    gsap.set(element, {
+                        left: left,
+                        top: gsap.utils.random(-300, -100),
+                        rotation: gsap.utils.random(-30, 30),
+                        scale: 1
+                    });
+
+                    gsap.killTweensOf(element);
+
+                    gsap.to(element, {
+                        top: maxDropTop,
+                        opacity: 1,
+                        rotation: gsap.utils.random(-30, 30),
+                        duration: gsap.utils.random(6, 10),
+                        delay: gsap.utils.random(0, 2),
+                        ease: "power1.out",
+                        onStart: () => {
+                            const swayMax = 60;
+                            const availableLeft = left - margin;
+                            const availableRight = containerWidth - margin - left - elementWidth;
+                            const swayDistance = Math.min(swayMax, availableLeft, availableRight);
+
+                            const swayDuration = gsap.utils.random(3, 6);
+                            const swayDirection = gsap.utils.random(0, 1) < 0.5 ? -1 : 1;
+                            const swayAmount = swayDistance * swayDirection;
+
+                            gsap.to(element, {
+                                x: swayAmount,
+                                rotation: '+=' + gsap.utils.random(-15, 15),
+                                yoyo: true,
+                                repeat: -1,
+                                duration: swayDuration,
+                                ease: "sine.inOut"
+                            });
+
+                            gsap.to(element, {
+                                scale: 1.15,
+                                yoyo: true,
+                                repeat: -1,
+                                duration: gsap.utils.random(1.5, 3.5),
+                                ease: "sine.inOut",
+                                delay: gsap.utils.random(0, 6)
+                            });
+                        },
+                        onComplete: () => {
+                            // 不需要循环动画
+                        }
+                    });
+
+                    // 添加可拖动和可点击功能
+                    makeElementDraggable(element);
+                    makeElementClickable(element);
+                });
+            }
+
+            // 使元素可拖动
+            function makeElementDraggable(element) {
+                let isDragging = false;
+                let startX, startY, initialLeft, initialTop;
+
+                $(element).on('mousedown touchstart', function(e) {
+                    e.preventDefault();
+                    isDragging = true;
+
+                    if (e.type === 'mousedown') {
+                        startX = e.pageX;
+                        startY = e.pageY;
+                    } else if (e.type === 'touchstart') {
+                        startX = e.originalEvent.touches[0].pageX;
+                        startY = e.originalEvent.touches[0].pageY;
+                    }
+
+                    initialLeft = parseFloat($(element).css('left'));
+                    initialTop = parseFloat($(element).css('top'));
+
+                    gsap.killTweensOf(element);
+
+                    $(element).css('z-index', 3);
+
+                    $(document).on('mousemove.drag touchmove.drag', dragMove);
+                    $(document).on('mouseup.drag touchend.drag touchcancel.drag', dragEnd);
+                });
+
+                function dragMove(e) {
+                    if (!isDragging) return;
+
+                    let currentX, currentY;
+                    if (e.type === 'mousemove') {
+                        currentX = e.pageX;
+                        currentY = e.pageY;
+                    } else if (e.type === 'touchmove') {
+                        currentX = e.originalEvent.touches[0].pageX;
+                        currentY = e.originalEvent.touches[0].pageY;
+                    }
+
+                    const deltaX = currentX - startX;
+                    const deltaY = currentY - startY;
+
+                    const scale = getScaleFactor();
+
+                    let newLeft = initialLeft + deltaX / scale;
+                    let newTop = initialTop + deltaY / scale;
+
+                    const containerWidth = designWidth;
+                    const containerHeight = designHeight;
+                    const elemWidth = parseFloat($(element).css('width'));
+                    const elemHeight = parseFloat($(element).css('height'));
+
+                    newLeft = Math.max(margin, Math.min(newLeft, containerWidth - margin - elemWidth));
+                    newTop = Math.max(margin, Math.min(newTop, containerHeight - margin - elemHeight));
+
+                    gsap.set(element, { left: newLeft, top: newTop, x: 0, rotation: 0 });
+                }
+
+                function dragEnd(e) {
+                    if (!isDragging) return;
+                    isDragging = false;
+
+                    const containerWidth = designWidth;
+                    const containerHeight = designHeight;
+                    const elemWidth = parseFloat($(element).css('width'));
+                    const elemHeight = parseFloat($(element).css('height'));
+
+                    const newLeft = parseFloat($(element).css('left'));
+                    const newTop = parseFloat($(element).css('top'));
+
+                    $(element).css('z-index', 2);
+
+                    gsap.to(element, {
+                        top: containerHeight - elemHeight - margin,
+                        opacity: 1,
+                        rotation: gsap.utils.random(-30, 30),
+                        duration: gsap.utils.random(6, 10),
+                        delay: gsap.utils.random(0, 2),
+                        ease: "power1.out",
+                        onStart: () => {
+                            const swayMax = 60;
+                            const availableLeft = newLeft - margin;
+                            const availableRight = containerWidth - margin - newLeft - elemWidth;
+                            const swayDistance = Math.min(swayMax, availableLeft, availableRight);
+
+                            const swayDuration = gsap.utils.random(3, 6);
+                            const swayDirection = gsap.utils.random(0, 1) < 0.5 ? -1 : 1;
+                            const swayAmount = swayDistance * swayDirection;
+
+                            gsap.to(element, {
+                                x: swayAmount,
+                                rotation: '+=' + gsap.utils.random(-15, 15),
+                                yoyo: true,
+                                repeat: -1,
+                                duration: swayDuration,
+                                ease: "sine.inOut"
+                            });
+
+                            gsap.to(element, {
+                                scale: 1.25,
+                                yoyo: true,
+                                repeat: -1,
+                                duration: gsap.utils.random(1.5, 3.5),
+                                ease: "sine.inOut",
+                                delay: gsap.utils.random(0, 3)
+                            });
+                        },
+                        onComplete: () => {
+                            // 不需要循环动画
+                        }
+                    });
+
+                    $(document).off('mousemove.drag touchmove.drag mouseup.drag touchend.drag touchcancel.drag');
+                }
+            }
+
+            // 使元素可点击并添加抛掷动画
+            function makeElementClickable(element) {
+                $(element).on('click', function(e) {
+                    e.preventDefault();
+
+                    // 检查是否是第一次点击
+                    if (!hasFirstElementClicked) {
+                        hasFirstElementClicked = true;
+                        // 显示添加评论按钮
+                        $('#add-comment-button').css('pointer-events', 'auto');
+                        $('#add-comment-button').animate({ opacity: 0.9 }, 3000);
+                    }
+
+                    throwElement(element, $(element));
+                });
+            }
+
+            // 抛掷动画：添加旋转和缩放效果
+            function throwElement(element, $element) {
+                if (splitElements.has(element)) {
+                    return;
+                }
+
+                splitElements.add(element);
+
+                gsap.killTweensOf(element);
+
+                const scale = getScaleFactor();
+
+                const containerWidth = designWidth;
+                const containerHeight = designHeight;
+
+                const elementWidth = parseFloat($element.css('width'));
+                const elementHeight = parseFloat($element.css('height'));
+
+                const centerX = containerWidth / 2 - elementWidth / 2;
+                const centerY = containerHeight / 2 - elementHeight / 2;
+
+                const directions = ['left', 'right', 'top'];
+                const chosenDirection = directions[Math.floor(Math.random() * directions.length)];
+
+                let startX, startY;
+
+                switch (chosenDirection) {
+                    case 'left':
+                        startX = -elementWidth * 2;
+                        startY = gsap.utils.random(0, containerHeight - elementHeight);
+                        break;
+                    case 'right':
+                        startX = containerWidth + elementWidth * 2;
+                        startY = gsap.utils.random(0, containerHeight - elementHeight);
+                        break;
+                    case 'top':
+                        startX = gsap.utils.random(0, containerWidth - elementWidth);
+                        startY = -elementHeight * 2;
+                        break;
+                }
+
+                const tl = gsap.timeline({
+                    onComplete: () => {
+                        splitElement(element, centerX, centerY);
+                        $element.remove();
+                    }
+                });
+
+                gsap.set(element, {
+                    left: startX,
+                    top: startY,
+                    scale: 8,
+                    opacity: 1,
+                    rotation: gsap.utils.random(-45, 45)
+                });
+
+                tl.to(element, {
+                    duration: 1.5,
+                    scale: 0.6,
+                    rotation: "+=" + gsap.utils.random(180, 600),
+                    left: centerX,
+                    top: centerY,
+                    ease: "power2.out",
+                });
+            }
+
+            // 分裂元素为球并添加呼吸效果
+            function splitElement(element, centerX, centerY) {
+                const type = $(element).data('type');
+                const config = splitConfig[type];
+
+                if (!config) return;
+
+                const count = config.count;
+                const ballImage = config.image;
+                const targetAreas = config.targetAreas;
+
+                const balls = [];
+
+                for (let i = 0; i < count; i++) {
+                    const ball = $('<img>')
+                        .attr('src', ballImage)
+                        .addClass('split-ball')
+                        .attr('data-type', type)
+                        .attr('data-sentence-index', i)
+                        .css({
+                            left: centerX - 21,
+                            top: centerY - 21,
+                            opacity: 0,
+                            scale: 1,
+                            position: 'absolute',
+                            pointerEvents: 'none'
+                        })
+                        .appendTo('.elements');
+
+                    gsap.set(ball, {
+                        left: centerX - 21,
+                        top: centerY - 21,
+                        scale: 1,
+                        opacity: 0
+                    });
+
+                    balls.push({ball: ball, sentenceIndex: i});
+                }
+
+                balls.forEach(({ball, sentenceIndex}) => {
+                    const angle = gsap.utils.random(0, 360);
+                    const distance = gsap.utils.random(50, 150);
+
+                    const xOffset = Math.cos(angle * Math.PI / 180) * distance;
+                    const yOffset = Math.sin(angle * Math.PI / 180) * distance;
+
+                    gsap.to(ball, {
+                        duration: 0.5,
+                        left: centerX - 21 + xOffset,
+                        top: centerY - 21 + yOffset,
+                        opacity: 1,
+                        ease: "power2.out",
+                        onComplete: () => {
+                            const stackRow = findStackRow(type);
+                            if (stackRow) {
+                                const stackRowElement = stackRow.element;
+                                const rowConfig = stackRow.config;
+
+                                const stackOffset = stackRowElement.position();
+                                const targetX = stackOffset.left + gsap.utils.random(rowConfig.xMin, rowConfig.xMax);
+                                const targetY = stackOffset.top + gsap.utils.random(rowConfig.yMin, rowConfig.yMax);
+
+                                gsap.to(ball, {
+                                    duration: 1.0,
+                                    left: targetX,
+                                    top: targetY,
+                                    ease: "power1.out",
+                                    onComplete: () => {
+                                        const swayAmount = gsap.utils.random(10, 30);
+                                        const swayDirection = gsap.utils.random(0, 1) < 0.5 ? -1 : 1;
+                                        const swayFinal = swayAmount * swayDirection;
+
+                                        gsap.to(ball, {
+                                            x: swayFinal,
+                                            rotation: '+=' + gsap.utils.random(-10, 10),
+                                            yoyo: true,
+                                            repeat: -1,
+                                            duration: 2,
+                                            ease: "sine.inOut"
+                                        });
+
+                                        gsap.to(ball, {
+                                            scale: 1.25,
+                                            yoyo: true,
+                                            repeat: -1,
+                                            duration: 4,
+                                            ease: "sine.inOut",
+                                            delay: gsap.utils.random(0, 4)
+                                        });
+
+                                        ball.css('pointer-events', 'auto');
+                                    }
+                                });
+                            } else {
+                                ball.remove();
+                            }
+                        }
+                    });
+                });
+            }
+
+            // 应用和计算缩放因子
+            function scaleContainer() {
+                const windowWidth = $(window).width();
+                const windowHeight = $(window).height();
+
+                const scaleX = windowWidth / designWidth;
+                const scaleY = windowHeight / designHeight;
+                const scale = Math.min(scaleX, scaleY);
+
+                $('#scale-container').css('transform', `scale(${scale})`);
+
+                const scaledWidth = designWidth * scale;
+                const scaledHeight = designHeight * scale;
+                const leftOffset = (windowWidth - scaledWidth) / 2;
+                const topOffset = (windowHeight - scaledHeight) / 2;
+                $('#scale-container').css({
+                    left: leftOffset + 'px',
+                    top: topOffset + 'px'
+                });
+            }
+
+            // 获取当前缩放因子
+            function getScaleFactor() {
+                const windowWidth = $(window).width();
+                const windowHeight = $(window).height();
+                const scaleX = windowWidth / designWidth;
+                const scaleY = windowHeight / designHeight;
+                return Math.min(scaleX, scaleY);
+            }
+
+            // 防抖函数
+            function debounce(func, wait) {
+                let timeout;
+                return function(...args) {
+                    clearTimeout(timeout);
+                    timeout = setTimeout(() => func.apply(this, args), wait);
+                };
+            }
+
+            // 初始化堆栈行和下落元素
+            function initializeAll() {
+                initializeStackRows();
+                initializeElements();
+            }
+
+            // 初始化所有内容
+            initializeAll();
+
+            // 初始调用设置缩放
+            scaleContainer();
+
+            // 绑定窗口调整大小事件并防抖
+            $(window).on('resize', debounce(function() {
+                scaleContainer();
+                initializeStackRows();
+            }, 200));
+ // 处理添加评论按钮点击并添加动画
+ $('#add-comment-button').on('click', function() {
+        // 添加点击动画：按钮快速放大然后恢复原状，同时不透明度从0.9到1再回到0.9
+        gsap.timeline()
+            .to('#add-comment-button', { 
+                scale: 1.2, 
+                opacity: 1, 
+                duration: 0.2, 
+                ease: "power1.out" 
+            })
+            .to('#add-comment-button', { 
+                scale: 1, 
+                opacity: 0.9, 
+                duration: 0.2, 
+                ease: "power1.in" 
+            });
+
+        // 显示评论模态框
+        $('#comment-modal').fadeIn();
+        $('#comment-input').val('');
+    });
+
+    
+
+            // 处理确认按钮点击
+            $('#confirm-button').on('click', function() {
+                const commentText = $('#comment-input').val().trim();
+                if (commentText) {
+                    // 保存评论
+                    addCommentBall(commentText);
+                    $('#comment-modal').fadeOut();
+                } else {
+                    alert('Please enter your comment!');
+                }
+            });
+
+            // 关闭评论模态框
+            $('#comment-modal .close').on('click', function() {
+                $('#comment-modal').fadeOut();
+            });
+
+            // 点击模态框外部关闭
+            $('#comment-modal').on('click', function(event) {
+                if ($(event.target).is('#comment-modal')) {
+                    $('#comment-modal').fadeOut();
+                }
+            });
+
+            // 添加评论球的函数
+            function addCommentBall(commentText) {
+                userComments.push(commentText); // 保存评论文本
+
+                // 如果不是重启，立即显示评论球
+                if (!isRestarting) {
+                    showCommentBall(commentText);
+                }
+            }
+
+            // 显示评论球的函数
+            function showCommentBall(commentText) {
+                const commentBall = $('<img>')
+                    .attr('src', '元素设计/评论球@2x.png')
+                    .addClass('split-ball')
+                    .attr('data-type', 'user-comment')
+                    .attr('data-comment-text', commentText)
+                    .css({
+                        left: gsap.utils.random(600, 1100) + 'px', // X轴范围 600 - 1100
+                        top: designHeight + 'px', // 从页面底部开始
+                        opacity: 0,
+                        scale: 1,
+                        position: 'absolute',
+                        pointerEvents: 'none'
+                    })
+                    .appendTo('.elements');
+
+                commentBalls.push(commentBall);
+
+                const startX = parseFloat(commentBall.css('left'));
+                const endY = gsap.utils.random(0, 50); // 浮动到顶部区域的随机位置
+                const amplitude = gsap.utils.random(30, 50); // 左右摇摆的幅度
+
+                gsap.to(commentBall, {
+                    duration: gsap.utils.random(5, 8), // 调整持续时间
+                    top: endY,
+                    opacity: 1,
+                    ease: "power1.out",
+                    onUpdate: function() {
+                        // 模拟轻微的左右摇摆
+                        const progress = this.progress();
+                        const sway = Math.sin(progress * Math.PI * 2) * amplitude;
+                        gsap.set(commentBall, { x: sway });
+                    },
+                    onComplete: () => {
+                        // 缓慢地在小范围内左右移动
+                        gsap.to(commentBall, {
+                            x: '+=' + (amplitude / 2),
+                            yoyo: true,
+                            repeat: -1,
+                            duration: 5,
+                            ease: "sine.inOut"
+                        });
+
+                        // 添加呼吸效果
+                        gsap.to(commentBall, {
+                            scale: 1.2,
+                            yoyo: true,
+                            repeat: -1,
+                            duration: 4,
+                            ease: "sine.inOut"
+                        });
+
+                        commentBall.css('pointer-events', 'auto');
+                    }
+                });
+            }
+
+            // 点击评论球查看评论
+            $(document).on('click', '.split-ball', function(e) {
+    e.preventDefault();
+
+    // 检查是否是用户评论小球
+    if ($(this).data('type') === 'user-comment') {
+        const commentText = $(this).data('comment-text');
+
+        // 显示评论内容
+        $('#note-image').attr('src', '元素设计/评论便签@2x.png');
+        $('#note-text').html(commentText.replace(/\n/g, '<br>'));
+
+        // 设置模态框样式
+        $('#note-modal').fadeIn();
+
+        // 禁用分页按钮
+        $('.pagination-buttons').hide();
+
+        // 确保滚动文字不显示
+        $('.note-scrolling-text').hide();
+        return; // 阻止进一步的逻辑
+    }
+
+    // 如果是普通分裂球，调用其特定逻辑
+    currentType = $(this).data('type');
+    currentSentenceIndex = $(this).data('sentence-index');
+    const mapping = noteMapping[currentType];
+
+    if (mapping) {
+        const sentences = mapping.sentences;
+        currentSentenceIndex = currentSentenceIndex % sentences.length;
+        const sentence = sentences[currentSentenceIndex];
+
+        $('#note-image').attr('src', mapping.image);
+        $('#note-text').html(sentence.replace(/\n/g, '<br>'));
+
+        // 显示滚动文字
+        $('.note-scrolling-text').show();
+
+        // 其他逻辑保持不变...
+    }
+});
+
+
+// 关闭模态框功能
+$('.close').on('click', function() {
+    $('#note-modal, #comment-modal, #page-modal-usage, #page-modal-project, #page-modal-goals').fadeOut(function() {
+        $('.pagination-buttons').show();
+        if (currentType && noteMapping[currentType] && noteMapping[currentType].modalPosition) {
+            const mapping = noteMapping[currentType];
+            $('#note-modal .modal-content-container').css({
+                top: mapping.modalPosition.top,
+                left: mapping.modalPosition.left,
+                transform: mapping.modalPosition.transform
+            });
+        } else {
+            // 使用默认值
+            $('#note-modal .modal-content-container').css({
+                top: '50%',
+                left: '50%',
+                transform: 'translate(-50%, -50%)'
+            });
+        }
+        // 停止音频
+        if (currentNoteAudio) {
+            currentNoteAudio.pause();
+            currentNoteAudio.currentTime = 0;
+            currentNoteAudio = null;
+        }
+    });
+});
+
+
+            // 点击模态框外部关闭
+            $('.modal').on('click', function(event) {
+                if ($(event.target).is('.modal')) {
+                    $(this).fadeOut(function() {
+                        $('.pagination-buttons').show();
+                        if (currentType && noteMapping[currentType] && noteMapping[currentType].modalPosition) {
+                            const mapping = noteMapping[currentType];
+                            $('#note-modal .modal-content-container').css({
+                                top: mapping.modalPosition.top,
+                                left: mapping.modalPosition.left,
+                                transform: mapping.modalPosition.transform
+                            });
+                        } else {
+                            // 使用默认值
+                            $('#note-modal .modal-content-container').css({
+                                top: '50%',
+                                left: '50%',
+                                transform: 'translate(-50%, -50%)'
+                            });
+                        }
+                        // 停止音频
+                        if (currentNoteAudio) {
+                            currentNoteAudio.pause();
+                            currentNoteAudio.currentTime = 0;
+                            currentNoteAudio = null;
+                        }
+                    });
+                }
+            });
+
+            // 处理分裂球点击事件
+            $(document).on('click', '.split-ball', function(e) {
+                e.preventDefault();
+
+                // 如果是用户评论球，已处理
+                if ($(this).data('type') === 'user-comment') {
+                    return;
+                }
+
+                currentType = $(this).data('type');
+                currentSentenceIndex = $(this).data('sentence-index');
+                const mapping = currentNoteMapping[currentType];
+
+                if (mapping) {
+                    const sentences = mapping.sentences;
+                    currentSentenceIndex = currentSentenceIndex % sentences.length;
+                    const sentence = sentences[currentSentenceIndex];
+
+                    $('#note-image').attr('src', mapping.image);
+                    $('#note-text').html(sentence.replace(/\n/g, '<br>'));
+
+                    // 设置句子样式和位置
+                    $('#note-text').css({
+                        top: mapping.textPosition.top || '50%',
+                        left: mapping.textPosition.left || '50%',
+                        'transform': 'translate(-50%, -50%)',
+                        'font-family': mapping.fontFamily || 'var(--main-font)',
+                        'font-size': mapping.fontSize || '24px',
+                    });
+
+                    // 设置笔记图片大小
+                    $('#note-image').css({
+                        width: mapping.size.width,
+                        height: mapping.size.height
+                    });
+
+                    // 设置模态框位置
+                    if (mapping.modalPosition) {
+                        $('#note-modal .modal-content-container').css({
+                            top: mapping.modalPosition.top,
+                            left: mapping.modalPosition.left,
+                            transform: mapping.modalPosition.transform
+                        });
+                    } else {
+                        // 使用默认值
+                        $('#note-modal .modal-content-container').css({
+                            top: '50%',
+                            left: '50%',
+                            transform: 'translate(-50%, -50%)'
+                        });
+                    }
+
+                    $('#note-modal').fadeIn();
+
+                    // 初始化笔记中的滚动文本
+                    initializeModalScrollingTexts(currentType);
+
+                    // 播放音频
+                    playNoteAudios(currentType);
+                }
+            });
+
+            // 处理分页按钮点击
+            $('#prev-sentence').on('click', function(e) {
+                e.preventDefault();
+                const mapping = currentNoteMapping[currentType];
+                if (mapping) {
+                    const sentences = mapping.sentences;
+                    currentSentenceIndex = (currentSentenceIndex - 1 + sentences.length) % sentences.length;
+                    const sentence = sentences[currentSentenceIndex];
+                    $('#note-text').html(sentence.replace(/\n/g, '<br>'));
+                }
+            });
+
+            $('#next-sentence').on('click', function(e) {
+                e.preventDefault();
+                const mapping = currentNoteMapping[currentType];
+                if (mapping) {
+                    const sentences = mapping.sentences;
+                    currentSentenceIndex = (currentSentenceIndex + 1) % sentences.length;
+                    const sentence = sentences[currentSentenceIndex];
+                    $('#note-text').html(sentence.replace(/\n/g, '<br>'));
+                }
+            });
+
+            // 处理重启动画功能
+            $('#restart-button').on('click', function() {
+                isRestarting = true;
+
+                // 重置音频
+                const backgroundMusic = document.getElementById('background-music');
+                if (backgroundMusic) {
+                    backgroundMusic.currentTime = 0;
+                    backgroundMusic.play();
+                }
+
+                // 隐藏添加评论按钮
+                $('#add-comment-button').css('opacity', 0);
+                $('#add-comment-button').css('pointer-events', 'none');
+
+                // 移除所有下落元素和球
+                $('.falling-element, .split-ball').remove();
+                splitElements.clear();
+                hasFirstElementClicked = false;
+
+                // 恢复 .elements 容器的初始 HTML 内容
+                $('.elements').html(initialElementsHTML);
+
+                // 重新初始化堆栈行和下落元素
+                initializeAll();
+
+                // 重新启动 opacity 动画
+                restartOpacityAnimations();
+
+                // 重新启动滚动文本
+                restartScrollingTexts();
+
+                // 在所有球到达位置后显示评论球
+                setTimeout(() => {
+                    isRestarting = false;
+                    userComments.forEach(commentText => {
+                        showCommentBall(commentText);
+                    });
+                }, 8000);
+            });
+
+            // 解决背景音乐自动播放问题
+            $(document).one('click', function() {
+                const backgroundMusic = document.getElementById('background-music');
+                if (backgroundMusic) {
+                    backgroundMusic.muted = false;
+                    backgroundMusic.play();
+                }
+            });
+
+            // 初始化背景 GIF 轮播
+            function initializeBackgroundGifs() {
+                const container = $('#background-gif-container');
+                container.find('img').each(function(index, img) {
+                    if(index === 0) {
+                        gsap.set(img, { opacity: 1 });
+                    } else {
+                        gsap.set(img, { opacity: 0 });
+                    }
+                });
+                setTimeout(cycleBackgroundGifs, 5000);
+            }
+
+            // 背景 GIF 轮播
+            function cycleBackgroundGifs() {
+                const container = $('#background-gif-container');
+                const backgroundGifs = container.find('img');
+                const totalGifs = backgroundGifs.length;
+
+                if (totalGifs <= 1) return;
+
+                gsap.to(backgroundGifs.eq(currentGifIndex), {
+                    duration: 1,
+                    opacity: 0,
+                    onComplete: () => {
+                        currentGifIndex = (currentGifIndex + 1) % totalGifs;
+                        gsap.to(backgroundGifs.eq(currentGifIndex), {
+                            duration: 1,
+                            opacity: 1,
+                            onComplete: () => {
+                                setTimeout(cycleBackgroundGifs, 5000);
+                            }
+                        });
+                    }
+                });
+            }
+
+            let currentGifIndex = 0;
+
+            // 调用初始化背景 GIF 轮播
+            initializeBackgroundGifs();
+
+            // 播放笔记对应的音频
+            let currentNoteAudio = null;
+
+            function playNoteAudios(type) {
+                const mapping = noteMapping[type];
+                if (mapping && mapping.audio && mapping.audio.length > 0) {
+                    playSequentialAudios(mapping.audio, 0);
+                }
+            }
+
+            function playSequentialAudios(audioList, index) {
+                if (index >= audioList.length) return;
+
+                currentNoteAudio = new Audio(audioList[index]);
+                currentNoteAudio.play().then(() => {
+                    currentNoteAudio.onended = () => {
+                        playSequentialAudios(audioList, index + 1);
+                    };
+                }).catch((error) => {
+                    console.error('无法播放音频：', audioList[index], error);
+                    playSequentialAudios(audioList, index + 1);
+                });
+            }
+
+            // 重新启动 opacity 动画函数
+            function restartOpacityAnimations() {
+                gsap.set("#fixed-text, #data-explanation", { opacity: 0 });
+
+                gsap.to("#fixed-text, #data-explanation", {
+                    opacity: 1,
+                    duration: parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--fade-in-duration')) || 1,
+                    ease: "power1.out",
+                    onComplete: () => {
+                        // 可选：执行完成后的操作
+                    }
+                });
+            }
+
+            function restartScrollingTexts() {
+    const $scrollTexts = $('#scrolling-text .scrolling-line .text-content');
+
+    // 终止所有现有的GSAP动画
+    gsap.killTweensOf($scrollTexts);
+
+    // 隐藏并重置滚动文本容器
+    $('#scrolling-text').css('display', 'block');
+
+    // 重置文本内容的位置
+    gsap.set($scrollTexts, { x: '100%' });
+
+    // 重新初始化滚动文本
+    initializeAllScrollingTexts();
+}
+
+            // 初始化 opacity 动画
+            function initializeOpacityAnimations() {
+                gsap.set("#fixed-text, #data-explanation", { opacity: 0 });
+
+                gsap.to("#fixed-text, #data-explanation", {
+                    opacity: 1,
+                    duration: parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--fade-in-duration')) || 1,
+                    ease: "power1.out",
+                    onComplete: () => {
+                        // 可选：执行完成后的操作
+                    }
+                });
+            }
+
+            // 调用初始化 opacity 动画
+            initializeOpacityAnimations();
+
+            // 初始化所有主页面滚动文本
+            initializeAllScrollingTexts();
+
+            // 处理新增的页面按钮点击事件
+            $('.side-button').on('click', function() {
+                const buttonId = $(this).attr('id');
+                if (buttonId === 'button-usage') {
+                    $('#page-modal-usage').fadeIn();
+                } else if (buttonId === 'button-project') {
+                    $('#page-modal-project').fadeIn();
+                } else if (buttonId === 'button-goals') {
+                    $('#page-modal-goals').fadeIn();
+                }
+            });
+
+            // 处理关闭按钮点击事件
+            $('.page-close').on('click', function() {
+                $(this).closest('.page-modal').fadeOut();
+            });
+
+            // 点击模态框外部关闭新增页面模态框
+            $('.page-modal').on('click', function(event) {
+                if ($(event.target).is('.page-modal')) {
+                    $(this).fadeOut();
+                }
+            });
+        });
+    </script>
+</body>
+</html>
